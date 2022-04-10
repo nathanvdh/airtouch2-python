@@ -1,0 +1,65 @@
+
+from enum import Enum, IntEnum
+
+class MessageLength(IntEnum):
+    UNDETERMINED = 0
+    COMMAND = 13
+    RESPONSE = 395
+
+# remove stuff from here if it's only ever used once
+# maybe also split it into a few sensical enums rather
+# than encompassing everything here
+class CommandMessageConstants(IntEnum):
+    BYTE_0 = 85                  # Byte 0 of command always fixed
+    BYTE_2 = 12                  # Byte 2 of command always fixed
+    TOGGLE = 128          # Toggle on/off in byte 4
+    BYTE_4_GRP_POSDEC = 1        # Position decrement (5% down) in byte 4
+    BYTE_4_GRP_POSINC = 2        # Position increment (5% up) in byte 4
+    BYTE_4_AC_MODE = 129         # AC mode in byte 4
+    BYTE_4_AC_FAN_SPD = 130      # AC Fan speed in byte 4
+    AC_TEMP_DEC = 147     # AC Temperature setpoint decrement in byte 4
+    AC_TEMP_INC = 163     # AC Temperature setpoint increment in byte 4
+    BYTE_5_GRP_POS = 1           # In Position dec/inc command, byte 5 is fixed
+
+#e.g.
+class CommandMessageType(IntEnum):
+    REQUEST_STATE = 1
+    ZONE_CONROL = 129
+    AC_CONTROL = 134
+
+class ResponseMessageConstants(IntEnum):
+    LONG_STRING_LENGTH = 16
+    SHORT_STRING_LENGTH = 8
+
+# Thanks home-assistant.io user Radebe2k
+class ResponseMessageOffsets(IntEnum):
+    # Header is 4 bytes
+    HEADER = 0
+
+    # There are 16 zones
+    # zone names are 8 bytes
+    ZONE_NAMES_START = 100
+    # zone statuses are 1 byte
+    ZONE_STATUSES_START = 228
+    # Zone strengths are 1 byte
+    ZONE_STRENGTHS_START = 276
+    
+    # 16 chars for system name
+    SYSTEM_NAME = 324
+
+    # perhaps should just store the first offset and iterate from 1st to 2nd
+    AC1_STATUS = 354
+    AC2_STATUS = 355
+    AC1_MODE = 358
+    AC2_MODE = 359
+    AC1_FAN_SPEED = 360
+    AC2_FAN_SPEED = 361
+    AC1_SET_TEMP = 362
+    AC2_SET_TEMP = 363
+    AC1_AMBIENT_TEMP = 364
+    AC2_AMBIENT_TEMP = 365
+    AC1_MANUFACTURER = 356
+    AC2_MANUFACTURER = 357
+    AC1_NAME_START = 370
+    AC2_NAME_START = 371
+    HASH = 394
