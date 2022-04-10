@@ -1,8 +1,8 @@
 import socket
 from threading import Thread, Event
-from queue import PriorityQueue
+from StablePriorityQueue import StablePriorityQueue
 from AT2Aircon import AT2Aircon
-from protocol.constants import MessageLength
+from protocol.constants import CommandMessageConstants, MessageLength, ResponseMessageConstants
 from protocol.enums import MessageType
 
 from protocol.messages import Message, CommandMessage, RequestState, ResponseMessage
@@ -14,7 +14,9 @@ class AT2Client:
         self._host_port: int = 8899
         self._sock: socket.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._stop_threads: bool = True
-        self._msg_queue: PriorityQueue[Message] = PriorityQueue()
+        # Need to make PriorityQueue stable, see: https://docs.python.org/3/library/heapq.html#priority-queue-implementation-notes
+        # (priority, count, Message)
+        self._msg_queue: StablePriorityQueue[Message] = StablePriorityQueue()
         self._new_response: Event =  Event()
         self._aircons: list[AT2Aircon] = []
         self._threads: list[Thread] = []
@@ -40,7 +42,8 @@ class AT2Client:
             print("Closing socket...")
             self._sock.shutdown(socket.SHUT_RDWR)
             self._sock.close()
-            self._msg_queue.put(None)
+            # shutdown signal has highest priority
+            self._msg_queue.put(None, priority=0)
             print("Joining threads...")
             for t in self._threads:
                 t.join()
@@ -69,7 +72,8 @@ class AT2Client:
         return b''.join(chunks)
 
     def send_command(self, command: CommandMessage) -> None:
-        self._msg_queue.put(command)
+        # commands have lower priority than responses
+        self._msg_queue.put(command, priority=2)
 
     def update_state(self):
         self.send_command(RequestState())
@@ -80,7 +84,8 @@ class AT2Client:
             if len(resp) != MessageLength.RESPONSE:
                 print("Invalid response, skipping")
                 continue
-            self._msg_queue.put(ResponseMessage(resp))
+            # responses have higher priority than commands
+            self._msg_queue.put(ResponseMessage(resp), priority=1)
             self._new_response.set()
     
     def _process_response(self, msg: ResponseMessage):
@@ -94,27 +99,25 @@ class AT2Client:
 
     def _main_loop(self) -> None:
         """Main loop"""
-        # for every command sent there should be a response from the server
-        # sending many commands in a row can fail without adding a sleep() between them
-        # to avoid wasting time sleeping, I want to just process any response messages before
-        # sending any command messages, to achieve this a PriorityQueue is used where
-        #last_msg_type: MessageType = MessageType.UNDETERMINED
+        # for every command sent there should be a response from the server that we should read first
+        # if there are no commands to send than we should just wait for a response message to be emitted
         while not self._stop_threads:
             # wait for either new command msg or new response msg, response has higher priority
             msg: Message = self._msg_queue.get()
+
             # shutdown signal
             if msg is None:
                 break
-            
+
             print(f"Got {msg.type} from queue")
-            
+
             if (msg.type == MessageType.COMMAND):
                 self._new_response.clear()
                 # serialize() only exists on CommandMessage
                 self._sock.sendall(msg.serialize())
                 # for every command sent, there should be a response, so wait for it
                 self._new_response.wait()
-            
+
             if (msg.type == MessageType.RESPONSE):
                 # probably should compute hash and request again if mismatch
                 print("Received response message:")

@@ -8,13 +8,7 @@ class Message(ABC):
     """ Message base class from which all airtouch 2 communications messages are derived"""
     length: MessageLength = MessageLength.UNDETERMINED
     type: MessageType = MessageType.UNDETERMINED
-    # for stability in priority queue
-    counter: int = 0
-    
-    def __init__(self):
-        self.entry = self.__class__.counter
-        self.__class__.counter = ((self.__class__.counter+1) % MAX_INT)
-    
+
     def add_checksum(self, serial_msg: bytearray) -> bytearray:
         serial_msg[self.length-1] = self.checksum(serial_msg)
         return serial_msg
@@ -26,13 +20,6 @@ class Message(ABC):
             sum += b
         sum = (sum % 256)
         return sum
-    
-    # for implementing priority
-    def __lt__(self, other: Message):
-        return (self.type, self.entry) < (other.type, other.entry)
-
-    def __eq__(self, other: Message):
-        return (self.type, self.entry) == (other.type, other.entry)
 
 class CommandMessage(Message):
     """ Command message base class from which all airtouch2 command messages are derived"""
