@@ -50,8 +50,6 @@ class AT2Client:
             print("Closing socket...")
             self._sock.shutdown(socket.SHUT_RDWR)
             self._sock.close()
-            # shutdown signal has highest priority
-#            self._cmd_queue.put(None)
             self._new_response_or_command.set()
 
     def _stop_and_join_main_thread(self):
@@ -68,8 +66,6 @@ class AT2Client:
         print("Shutdown successful")
 
     def send_command(self, command: CommandMessage) -> None:
-        # commands have lower priority (2) than responses (1)
-        #self._msg_queue.put(command, priority=2)
         self._cmd_queue.put(command)
         self._new_response_or_command.set()
 
@@ -100,7 +96,6 @@ class AT2Client:
                 print("Invalid response, skipping")
                 continue
             print("handle_incoming received new response")
-            # responses have higher priority (1) than commands (2)
             self._last_response = ResponseMessage(resp)
             self._new_response.set()
             self._new_response_or_command.set()
@@ -133,22 +128,19 @@ class AT2Client:
 
     def _main_loop(self) -> None:
         """Main loop"""
-        # for every command sent there should be a response from the server that we should read first
-        # if there are no commands to send than we should just wait for a response message to be emitted
         while not self._stop_threads:
-            # wait for either new command msg or new response msg, response has higher priority in this queue
+            # wait for either a server message to be emitted or a command to be put on the queue
             print("Waiting for something to happen")
             self._new_response_or_command.wait()
             print("Something happened")
+            # process a message if that's what triggered the event
             self._process_last_response()
             
+            # process commands if that's what triggered the event
             while self._cmd_queue.qsize() > 0:
                 print("There are commands in the queue")
                 try:
                     cmd = self._cmd_queue.get(block=False)
-#                    if cmd is None:
-#                        print("shutdown signal received")
-#                        break
                 except Empty:
                     print("command queue was empty")
                     break
