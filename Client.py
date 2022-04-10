@@ -1,5 +1,3 @@
-#from queue import Queue
-#import select
 import socket
 from threading import Thread, Event
 from StablePriorityQueue import StablePriorityQueue
@@ -57,9 +55,9 @@ class AT2Client:
     def _stop_and_join_main_thread(self):
         self._stop_common()
         self._threads[1].join()
+        self._active = False
 
     def stop(self):
-        # TODO: do socket programming properly with select so can cleanly shutdown
         self._stop_common()
         print("Joining threads...")
         for t in self._threads:
@@ -70,7 +68,6 @@ class AT2Client:
     def send_command(self, command: CommandMessage) -> None:
         # commands have lower priority (2) than responses (1)
         self._msg_queue.put(command, priority=2)
-        #self._cmd_queue.put(command)
 
     def update_state(self):
         self.send_command(RequestState())
@@ -145,41 +142,3 @@ class AT2Client:
                 self._process_response(msg)
                 for aircon in self._aircons:
                     print(aircon)
-
-
-    # I tried to do the _main_loop() it with select, without the complicated StablePriorityQueue that contains both message types
-    # but with non-blocking select() this is just polling and hence pegs the CPU at 100% all the time
-    # If I make select() block until _sock is ready to read then it's the same as a blocking recv() which defeats the whole purpose of this,
-    # I don't understand what to do here and I'm frustrated because surely this is common for client software
-    # somebody please tell me how to do this properly
-    # def _main_loop_nonblocking(self) -> None:
-    #     """Use nonblocking sockets"""
-    #     self._sock.setblocking(False)
-    #     waiting_response = False
-    #     while not self._stop_threads:
-    #         #print("Top of loop")
-    #         ready_to_read, _, _ = select.select([self._sock], [], [], 0)
-    #         #print("select() call made")
-
-    #         while ready_to_read:
-    #             resp = self._await_response()
-    #             if len(resp) != MessageLength.RESPONSE:
-    #                 print("Invalid response, skipping")
-    #             else:
-    #                 self._process_response(ResponseMessage(resp))
-    #                 waiting_response = False
-    #                 for aircon in self._aircons:
-    #                     print(aircon)
-    #             #print("Making another select() call...")
-    #             ready_to_read, _, _ = select.select([self._sock], [], [], 0)
-    #             #print("select() call made")
-            
-    #         if not waiting_response:
-    #             _, ready_to_write, _ = select.select([], [self._sock], [], 0)
-    #             if ready_to_write:
-    #                 if not self._cmd_queue.empty():
-    #                     print("Sending command...")
-    #                     self._sock.sendall(self._cmd_queue.get().serialize())
-    #                     waiting_response = True
-
-
