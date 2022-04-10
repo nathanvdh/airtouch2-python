@@ -1,3 +1,5 @@
+from queue import Queue
+import select
 import socket
 from threading import Thread, Event
 from StablePriorityQueue import StablePriorityQueue
@@ -13,9 +15,8 @@ class AT2Client:
         self._host_port: int = 8899
         self._sock: socket.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._stop_threads: bool = True
-        # Need to make PriorityQueue stable, see: https://docs.python.org/3/library/heapq.html#priority-queue-implementation-notes
-        # (priority, count, Message)
         self._msg_queue: StablePriorityQueue[Message] = StablePriorityQueue()
+        #self._cmd_queue: Queue[CommandMessage] = Queue()
         self._new_response: Event =  Event()
         self._aircons: list[AT2Aircon] = []
         self._threads: list[Thread] = []
@@ -28,6 +29,7 @@ class AT2Client:
     def start(self) -> None:
         self._connect()
         self._threads = [Thread(target=self._handle_incoming), Thread(target=self._main_loop)]
+        #self._threads = [Thread(target=self._main_loop_nonblocking)]
         self._stop_threads = False
         for t in self._threads:
             t.start()
@@ -73,6 +75,7 @@ class AT2Client:
     def send_command(self, command: CommandMessage) -> None:
         # commands have lower priority than responses
         self._msg_queue.put(command, priority=2)
+        #self._cmd_queue.put(command)
 
     def update_state(self):
         self.send_command(RequestState())
@@ -111,7 +114,6 @@ class AT2Client:
             print(f"Got {msg.__class__.__name__} from queue")
             if isinstance(msg, CommandMessage):
                 self._new_response.clear()
-                # serialize() only exists on CommandMessage
                 self._sock.sendall(msg.serialize())
                 # for every command sent, there should be a response, so wait for it
                 self._new_response.wait()
@@ -123,6 +125,43 @@ class AT2Client:
                 for aircon in self._aircons:
                     print(aircon)
 
-            #last_msg_type = msg.type
+
+    # I tried to do it with select, without the complicated StablePriorityQueue that contains both message types
+    # but with non-blocking select() this is just polling and hence pegs the CPU 100% all the time
+    # If I make select() block until _sock is ready to read then its the same as a blocking recv() which defeats the whole purpose of this,
+    # I don't understand what to do here and I'm frustrated because surely this is common for client software
+    # somebody please tell me how to do this properly
+    # def _main_loop_nonblocking(self) -> None:
+    #     """Use nonblocking sockets"""
+    #     self._sock.setblocking(False)
+    #     waiting_response = False
+    #     while not self._stop_threads:
+    #         #print("Top of loop")
+    #         ready_to_read, _, _ = select.select([self._sock], [], [], 0)
+    #         #print("select() call made")
+
+    #         #if not (ready_to_read):
+    #         #    print("Timed out")
+
+    #         while ready_to_read:
+    #             resp = self._await_response()
+    #             if len(resp) != MessageLength.RESPONSE:
+    #                 print("Invalid response, skipping")
+    #             else:
+    #                 self._process_response(ResponseMessage(resp))
+    #                 waiting_response = False
+    #                 for aircon in self._aircons:
+    #                     print(aircon)
+    #             #print("Making another select() call...")
+    #             ready_to_read, _, _ = select.select([self._sock], [], [], 0)
+    #             #print("select() call made")
+            
+    #         if not waiting_response:
+    #             _, ready_to_write, _ = select.select([], [self._sock], [], 0)
+    #             if ready_to_write:
+    #                 if not self._cmd_queue.empty():
+    #                     print("Sending command...")
+    #                     self._sock.sendall(self._cmd_queue.get().serialize())
+    #                     waiting_response = True
 
 

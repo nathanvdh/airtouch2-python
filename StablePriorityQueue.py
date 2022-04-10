@@ -1,6 +1,8 @@
 from queue import PriorityQueue
 from sys import maxsize as MAX_INT
 
+# Need to make PriorityQueue stable, see: https://docs.python.org/3/library/heapq.html#priority-queue-implementation-notes
+# The item in the queue is: (priority, count, Message)
 class StablePriorityQueue(PriorityQueue):
     def __init__(self):
         super().__init__()
