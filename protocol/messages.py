@@ -1,13 +1,12 @@
 from __future__ import annotations
 from abc import ABC
 from protocol.constants import CommandMessageConstants, CommandMessageType, MessageLength, ResponseMessageConstants, ResponseMessageOffsets
-from protocol.enums import MessageType, ACFanSpeed, ACMode
+from protocol.enums import ACFanSpeed, ACMode
 from sys import maxsize as MAX_INT
 
 class Message(ABC):
     """ Message base class from which all airtouch 2 communications messages are derived"""
     length: MessageLength = MessageLength.UNDETERMINED
-    type: MessageType = MessageType.UNDETERMINED
 
     def add_checksum(self, serial_msg: bytearray) -> bytearray:
         serial_msg[self.length-1] = self.checksum(serial_msg)
@@ -24,7 +23,6 @@ class Message(ABC):
 class CommandMessage(Message):
     """ Command message base class from which all airtouch2 command messages are derived"""
     length: MessageLength = MessageLength.COMMAND
-    type: MessageType = MessageType.COMMAND
     
     # command messages are only sent so only need to be serialized
     def serialize(self, prefilled_msg: bytearray) -> bytearray:
@@ -75,7 +73,6 @@ class ResponseMessage(Message):
     """ The airtouch 2 response message (there is only one) that contains all the information about the current state of the system"""
     
     length: MessageLength = MessageLength.RESPONSE
-    type: MessageType = MessageType.RESPONSE
 
     # only getting fundamental things for AC1 for now
     def __init__(self, raw_response: bytes):

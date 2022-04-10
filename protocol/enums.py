@@ -1,18 +1,18 @@
 from enum import Enum, IntEnum
 
 # Note the order here is also the priority in which the messages are handled (lower = higher priority)
-class MessageType(IntEnum):
-    UNDETERMINED = 0
-    RESPONSE = 1
-    COMMAND = 2
+# class MessageType(IntEnum):
+#     UNDETERMINED = 0
+#     RESPONSE = 1
+#     COMMAND = 2
 
-    def __str__(self):
-        if self == MessageType.UNDETERMINED:
-            return "Undetermined"
-        if self == MessageType.RESPONSE:
-            return "Response"
-        if self == MessageType.COMMAND:
-            return "Command"
+#     def __str__(self):
+#         if self == MessageType.UNDETERMINED:
+#             return "Undetermined"
+#         if self == MessageType.RESPONSE:
+#             return "Response"
+#         if self == MessageType.COMMAND:
+#             return "Command"
 
 class ACMode(Enum):
     AUTO = 0

@@ -2,8 +2,7 @@ import socket
 from threading import Thread, Event
 from StablePriorityQueue import StablePriorityQueue
 from AT2Aircon import AT2Aircon
-from protocol.constants import CommandMessageConstants, MessageLength, ResponseMessageConstants
-from protocol.enums import MessageType
+from protocol.constants import MessageLength
 
 from protocol.messages import Message, CommandMessage, RequestState, ResponseMessage
 
@@ -109,16 +108,15 @@ class AT2Client:
             if msg is None:
                 break
 
-            print(f"Got {msg.type} from queue")
-
-            if (msg.type == MessageType.COMMAND):
+            print(f"Got {msg.__class__.__name__} from queue")
+            if isinstance(msg, CommandMessage):
                 self._new_response.clear()
                 # serialize() only exists on CommandMessage
                 self._sock.sendall(msg.serialize())
                 # for every command sent, there should be a response, so wait for it
                 self._new_response.wait()
 
-            if (msg.type == MessageType.RESPONSE):
+            if isinstance(msg, ResponseMessage):
                 # probably should compute hash and request again if mismatch
                 print("Received response message:")
                 self._process_response(msg)
@@ -126,4 +124,5 @@ class AT2Client:
                     print(aircon)
 
             #last_msg_type = msg.type
+
 
