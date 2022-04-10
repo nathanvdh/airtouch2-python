@@ -1,5 +1,5 @@
-from queue import Queue
-import select
+#from queue import Queue
+#import select
 import socket
 from threading import Thread, Event
 from StablePriorityQueue import StablePriorityQueue
@@ -36,21 +36,6 @@ class AT2Client:
         self._active = True
         self.update_state()
 
-    def stop(self):
-        # TODO: do socket programming properly with select so can cleanly shutdown
-        if self._active:
-            self._stop_threads = True
-            print("Closing socket...")
-            self._sock.shutdown(socket.SHUT_RDWR)
-            self._sock.close()
-            # shutdown signal has highest priority
-            self._msg_queue.put(None, priority=0)
-            print("Joining threads...")
-            for t in self._threads:
-                t.join()
-            self._active = False
-            print("Shutdown successful")
-
     def _connect(self) -> bool:
         try:
             self._sock.connect((self._host_ip, self._host_port))
@@ -60,7 +45,38 @@ class AT2Client:
         print("Connected to airtouch 2 server")
         return True
 
+    def _stop_common(self):
+        if self._active:
+            self._stop_threads = True
+            print("Closing socket...")
+            self._sock.shutdown(socket.SHUT_RDWR)
+            self._sock.close()
+            # shutdown signal has highest priority
+            self._msg_queue.put(None, priority=0)
+
+    def _stop_and_join_main_thread(self):
+        self._stop_common()
+        self._threads[1].join()
+
+    def stop(self):
+        # TODO: do socket programming properly with select so can cleanly shutdown
+        self._stop_common()
+        print("Joining threads...")
+        for t in self._threads:
+            t.join()
+        self._active = False
+        print("Shutdown successful")
+
+    def send_command(self, command: CommandMessage) -> None:
+        # commands have lower priority (2) than responses (1)
+        self._msg_queue.put(command, priority=2)
+        #self._cmd_queue.put(command)
+
+    def update_state(self):
+        self.send_command(RequestState())
+
     def _await_response(self) -> bytes:
+        # taken (almost) straight from https://docs.python.org/3/howto/sockets.html
         chunks = []
         bytes_recd = 0
         while bytes_recd < MessageLength.RESPONSE:
@@ -72,23 +88,28 @@ class AT2Client:
             bytes_recd = bytes_recd + len(chunk)
         return b''.join(chunks)
 
-    def send_command(self, command: CommandMessage) -> None:
-        # commands have lower priority than responses
-        self._msg_queue.put(command, priority=2)
-        #self._cmd_queue.put(command)
-
-    def update_state(self):
-        self.send_command(RequestState())
-
     def _handle_incoming(self) -> None:
+        socket_broken = False
         while not self._stop_threads:
             resp = self._await_response()
+            if len(resp) == 0:
+                socket_broken = True
+                break
             if len(resp) != MessageLength.RESPONSE:
                 print("Invalid response, skipping")
                 continue
-            # responses have higher priority than commands
+            # responses have higher priority (1) than commands (2)
             self._msg_queue.put(ResponseMessage(resp), priority=1)
             self._new_response.set()
+        
+        if not self._stop_threads and socket_broken:
+            print("Socket connection was broken, trying to recover...")
+            print("Stopping main thread...")
+            self._stop_and_join_main_thread()
+            print("Restarting client...")
+            # get a new socket
+            self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.start()
     
     def _process_response(self, msg: ResponseMessage):
         # check message if there are 1 or 2 aircons - not sure how to do this yet
@@ -104,10 +125,10 @@ class AT2Client:
         # for every command sent there should be a response from the server that we should read first
         # if there are no commands to send than we should just wait for a response message to be emitted
         while not self._stop_threads:
-            # wait for either new command msg or new response msg, response has higher priority
+            # wait for either new command msg or new response msg, response has higher priority in this queue
             msg: Message = self._msg_queue.get()
 
-            # shutdown signal
+            # shutdown signal, None is put on the queue by _stop_common()
             if msg is None:
                 break
 
@@ -119,16 +140,16 @@ class AT2Client:
                 self._new_response.wait()
 
             if isinstance(msg, ResponseMessage):
-                # probably should compute hash and request again if mismatch
+                # probably should compute and check hash then request again if mismatch
                 print("Received response message:")
                 self._process_response(msg)
                 for aircon in self._aircons:
                     print(aircon)
 
 
-    # I tried to do it with select, without the complicated StablePriorityQueue that contains both message types
-    # but with non-blocking select() this is just polling and hence pegs the CPU 100% all the time
-    # If I make select() block until _sock is ready to read then its the same as a blocking recv() which defeats the whole purpose of this,
+    # I tried to do the _main_loop() it with select, without the complicated StablePriorityQueue that contains both message types
+    # but with non-blocking select() this is just polling and hence pegs the CPU at 100% all the time
+    # If I make select() block until _sock is ready to read then it's the same as a blocking recv() which defeats the whole purpose of this,
     # I don't understand what to do here and I'm frustrated because surely this is common for client software
     # somebody please tell me how to do this properly
     # def _main_loop_nonblocking(self) -> None:
@@ -139,9 +160,6 @@ class AT2Client:
     #         #print("Top of loop")
     #         ready_to_read, _, _ = select.select([self._sock], [], [], 0)
     #         #print("select() call made")
-
-    #         #if not (ready_to_read):
-    #         #    print("Timed out")
 
     #         while ready_to_read:
     #             resp = self._await_response()
