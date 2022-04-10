@@ -1,10 +1,11 @@
 import socket
 from threading import Thread, Event
-from StablePriorityQueue import StablePriorityQueue
-from AT2Aircon import AT2Aircon
-from protocol.constants import MessageLength
+from queue import Empty, Queue
 
-from protocol.messages import Message, CommandMessage, RequestState, ResponseMessage
+from AT2Aircon import AT2Aircon
+
+from protocol.constants import MessageLength
+from protocol.messages import CommandMessage, RequestState, ResponseMessage
 
 class AT2Client:
 
@@ -13,9 +14,10 @@ class AT2Client:
         self._host_port: int = 8899
         self._sock: socket.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._stop_threads: bool = True
-        self._msg_queue: StablePriorityQueue[Message] = StablePriorityQueue()
-        #self._cmd_queue: Queue[CommandMessage] = Queue()
+        self._cmd_queue: Queue[CommandMessage] = Queue()
+        self._last_response: ResponseMessage = None
         self._new_response: Event =  Event()
+        self._new_response_or_command: Event = Event()
         self._aircons: list[AT2Aircon] = []
         self._threads: list[Thread] = []
         self._active: bool = False
@@ -27,7 +29,6 @@ class AT2Client:
     def start(self) -> None:
         self._connect()
         self._threads = [Thread(target=self._handle_incoming), Thread(target=self._main_loop)]
-        #self._threads = [Thread(target=self._main_loop_nonblocking)]
         self._stop_threads = False
         for t in self._threads:
             t.start()
@@ -50,7 +51,8 @@ class AT2Client:
             self._sock.shutdown(socket.SHUT_RDWR)
             self._sock.close()
             # shutdown signal has highest priority
-            self._msg_queue.put(None, priority=0)
+#            self._cmd_queue.put(None)
+            self._new_response_or_command.set()
 
     def _stop_and_join_main_thread(self):
         self._stop_common()
@@ -67,7 +69,9 @@ class AT2Client:
 
     def send_command(self, command: CommandMessage) -> None:
         # commands have lower priority (2) than responses (1)
-        self._msg_queue.put(command, priority=2)
+        #self._msg_queue.put(command, priority=2)
+        self._cmd_queue.put(command)
+        self._new_response_or_command.set()
 
     def update_state(self):
         self.send_command(RequestState())
@@ -95,10 +99,12 @@ class AT2Client:
             if len(resp) != MessageLength.RESPONSE:
                 print("Invalid response, skipping")
                 continue
+            print("handle_incoming received new response")
             # responses have higher priority (1) than commands (2)
-            self._msg_queue.put(ResponseMessage(resp), priority=1)
+            self._last_response = ResponseMessage(resp)
             self._new_response.set()
-        
+            self._new_response_or_command.set()
+
         if not self._stop_threads and socket_broken:
             print("Socket connection was broken, trying to recover...")
             print("Stopping main thread...")
@@ -107,15 +113,23 @@ class AT2Client:
             # get a new socket
             self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.start()
-    
-    def _process_response(self, msg: ResponseMessage):
-        # check message if there are 1 or 2 aircons - not sure how to do this yet
-        # do the stuff, update aircons, zones etc...
-        if not self._aircons:
-            self._aircons.append(AT2Aircon(0, self, msg))
-        else:
-            for aircon in self._aircons:
-                aircon.update(msg)
+
+    def _process_last_response(self):
+        # actually only process if we have a new one
+        if self._last_response:
+            resp = self._last_response
+            self._last_response = None
+            self._new_response.clear()
+            self._new_response_or_command.clear()
+            # check message if there are 1 or 2 aircons - not sure how to do this yet
+            # do the stuff, update aircons, zones etc...
+            if not self._aircons:
+                self._aircons.append(AT2Aircon(0, self, resp))
+                print(self._aircons[0])
+            else:
+                for aircon in self._aircons:
+                    aircon.update(resp)
+                    print(aircon)
 
     def _main_loop(self) -> None:
         """Main loop"""
@@ -123,22 +137,23 @@ class AT2Client:
         # if there are no commands to send than we should just wait for a response message to be emitted
         while not self._stop_threads:
             # wait for either new command msg or new response msg, response has higher priority in this queue
-            msg: Message = self._msg_queue.get()
-
-            # shutdown signal, None is put on the queue by _stop_common()
-            if msg is None:
-                break
-
-            print(f"Got {msg.__class__.__name__} from queue")
-            if isinstance(msg, CommandMessage):
+            print("Waiting for something to happen")
+            self._new_response_or_command.wait()
+            print("Something happened")
+            self._process_last_response()
+            
+            while self._cmd_queue.qsize() > 0:
+                print("There are commands in the queue")
+                try:
+                    cmd = self._cmd_queue.get(block=False)
+#                    if cmd is None:
+#                        print("shutdown signal received")
+#                        break
+                except Empty:
+                    print("command queue was empty")
+                    break
                 self._new_response.clear()
-                self._sock.sendall(msg.serialize())
-                # for every command sent, there should be a response, so wait for it
+                print(f"Sending {cmd.__class__.__name__}")
+                self._sock.sendall(cmd.serialize())
                 self._new_response.wait()
-
-            if isinstance(msg, ResponseMessage):
-                # probably should compute and check hash then request again if mismatch
-                print("Received response message:")
-                self._process_response(msg)
-                for aircon in self._aircons:
-                    print(aircon)
+                self._process_last_response()
