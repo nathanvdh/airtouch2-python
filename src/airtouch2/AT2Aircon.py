@@ -1,22 +1,26 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
-from protocol.messages import ChangeSetTemperature, ResponseMessage, ToggleAC
+from airtouch2.protocol.enums import ACFanSpeed, ACManufacturer, ACMode
+from airtouch2.protocol.messages import ChangeSetTemperature, ResponseMessage, SetFanSpeed, SetMode, ToggleAC
 if TYPE_CHECKING:
-    from Client import AT2Client
+    from airtouch2.AT2Client import AT2Client
 
 class AT2Aircon:
     def __init__(self, number: int, client: AT2Client, response_message: ResponseMessage=None):
         self.number = number
-        self.client = client
+        self._client = client
         if response_message:
             self.update(response_message)
         else:
             self.system_name = "UNKNOWN"
+            self.name = "UNKNOWN"
+            self.manufacturer = ACManufacturer.NONE
             self.on = False
             self.mode = -1
             self.fan_speed = -1
             self.ambient_temp = -1
             self.set_temp = -1
+            self.zones = []
 
     def update(self, response_message: ResponseMessage) -> None:
         self.system_name = response_message.system_name
@@ -30,18 +34,30 @@ class AT2Aircon:
         self.name = response_message.ac_name[self.number]
 
     def inc_dec_set_temp(self, inc: bool):
-        self.client.send_command(ChangeSetTemperature(self.number, inc))
+        self._client.send_command(ChangeSetTemperature(self.number, inc))
 
     def set_set_temp(self, new_temp: int):
         temp_diff = new_temp - self.set_temp
-        print(f"Temp diff: {temp_diff}")
+        #print(f"Temp diff: {temp_diff}")
         inc = temp_diff > 0
         for i in range(abs(temp_diff)):
             self.inc_dec_set_temp(inc)
 
-    def turn_on_off(self, on: bool):
+    def _turn_on_off(self, on: bool):
         if self.on != on:
-            self.client.send_command(ToggleAC(self.number))
+            self._client.send_command(ToggleAC(self.number))
+    
+    def turn_off(self):
+        self._turn_on_off(False)
+    
+    def turn_on(self):
+        self._turn_on_off(True)
+
+    def set_fan_speed(self, fan_speed: ACFanSpeed):
+        self._client.send_command(SetFanSpeed(self.number, fan_speed))
+
+    def set_mode(self, mode: ACMode):
+        self._client.send_command(SetMode(self.number, mode))
 
     def __str__(self):
         return f"""

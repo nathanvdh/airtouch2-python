@@ -1,7 +1,7 @@
 from __future__ import annotations
 from abc import ABC
-from protocol.constants import CommandMessageConstants, CommandMessageType, MessageLength, ResponseMessageConstants, ResponseMessageOffsets
-from protocol.enums import ACFanSpeed, ACMode
+from airtouch2.protocol.constants import ACControlCommands, CommandMessageConstants, CommandMessageType, MessageLength, ResponseMessageConstants, ResponseMessageOffsets
+from airtouch2.protocol.enums import ACFanSpeed, ACManufacturer, ACMode
 from sys import maxsize as MAX_INT
 
 class Message(ABC):
@@ -40,7 +40,7 @@ class RequestState(CommandMessage):
 
 class ACControlCommand(CommandMessage):
     """Base class from which all AC control messages are derived"""
-    def __init__(self, target_ac_number):
+    def __init__(self, target_ac_number: int):
         super().__init__()
         self.target_ac = target_ac_number
 
@@ -57,7 +57,7 @@ class ChangeSetTemperature(ACControlCommand):
 
     def serialize(self) -> bytearray:
         serial_msg: bytearray = bytearray(self.length)
-        serial_msg[4] = CommandMessageConstants.AC_TEMP_INC if self.inc else CommandMessageConstants.AC_TEMP_DEC
+        serial_msg[4] = ACControlCommands.TEMP_INC if self.inc else ACControlCommands.TEMP_DEC
         return super().serialize(serial_msg)
 
 class ToggleAC(ACControlCommand):
@@ -68,6 +68,30 @@ class ToggleAC(ACControlCommand):
         serial_msg[4] = CommandMessageConstants.TOGGLE
         return super().serialize(serial_msg)
 
+# needs investigation
+class SetFanSpeed(ACControlCommand):
+    """Command to set the AC fan speed to one of those in ACFanSpeed"""
+    def __init__(self, target_ac_number: int, fan_speed: ACFanSpeed):
+        super().__init__(target_ac_number)
+        self.fan_speed: ACFanSpeed = fan_speed
+
+    def serialize(self) -> bytearray:
+        serial_msg: bytearray = bytearray(self.length)
+        serial_msg[4] = ACControlCommands.SET_FAN_SPEED
+        serial_msg[5] = self.fan_speed
+        return super().serialize(serial_msg)
+
+class SetMode(ACControlCommand):
+    """Command to set the AC mode to one of those in ACMode"""
+    def __init__(self, target_ac_number: int, mode: ACMode):
+        super().__init__(target_ac_number)
+        self.mode: ACMode = mode
+    
+    def serialize(self) -> bytearray:
+        serial_msg: bytearray = bytearray(self.length)
+        serial_msg[4] = ACControlCommands.SET_MODE
+        serial_msg[5] = self.mode
+        return super().serialize(serial_msg)
 
 class ResponseMessage(Message):
     """ The airtouch 2 response message (there is only one) that contains all the information about the current state of the system"""
@@ -87,7 +111,7 @@ class ResponseMessage(Message):
         self.ac_fan_speed = [ACFanSpeed(raw_response[ResponseMessageOffsets.AC1_FAN_SPEED] & 0x0F)]
         self.ac_set_temp = [raw_response[ResponseMessageOffsets.AC1_SET_TEMP]]
         self.ac_ambient_temp = [raw_response[ResponseMessageOffsets.AC1_AMBIENT_TEMP]]
-        self.ac_manufacturer = [raw_response[ResponseMessageOffsets.AC1_MANUFACTURER]]
+        self.ac_manufacturer = [ACManufacturer(raw_response[ResponseMessageOffsets.AC1_MANUFACTURER])]
         self.ac_name = [raw_response[ResponseMessageOffsets.AC1_NAME_START:ResponseMessageOffsets.AC1_NAME_START+ResponseMessageConstants.SHORT_STRING_LENGTH].decode()]
         #self.zones = {}
         self.system_name = raw_response[ResponseMessageOffsets.SYSTEM_NAME:ResponseMessageOffsets.SYSTEM_NAME+ResponseMessageConstants.LONG_STRING_LENGTH].decode()

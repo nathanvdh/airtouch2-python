@@ -1,16 +1,22 @@
+import errno
 import socket
+import logging
+
 from threading import Thread, Event
 from queue import Empty, Queue
+from typing import Callable
 
-from AT2Aircon import AT2Aircon
+from airtouch2.AT2Aircon import AT2Aircon
 
-from protocol.constants import MessageLength
-from protocol.messages import CommandMessage, RequestState, ResponseMessage
+from airtouch2.protocol.constants import MessageLength
+from airtouch2.protocol.messages import CommandMessage, RequestState, ResponseMessage
+
+_LOGGER = logging.getLogger(__name__)
 
 class AT2Client:
 
-    def __init__(self):
-        self._host_ip: str = "192.168.1.15"
+    def __init__(self, host: str):
+        self._host_ip: str = host
         self._host_port: int = 8899
         self._sock: socket.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._stop_threads: bool = True
@@ -18,39 +24,52 @@ class AT2Client:
         self._last_response: ResponseMessage = None
         self._new_response: Event =  Event()
         self._new_response_or_command: Event = Event()
-        self._aircons: list[AT2Aircon] = []
+        self.aircons: list[AT2Aircon] = []
+        self.system_name = "UNKNOWN"
         self._threads: list[Thread] = []
         self._active: bool = False
+        self._callbacks: list[Callable] = []
         self._sock.settimeout(None)
+        self._socket_broken = False
+        self._data_updated = Event()
 
     def __del__(self):
         self.stop()
     
-    def start(self) -> None:
-        self._connect()
+    def start(self) -> bool:
+        if not self._connect():
+            return False
         self._threads = [Thread(target=self._handle_incoming), Thread(target=self._main_loop)]
         self._stop_threads = False
         for t in self._threads:
             t.start()
         self._active = True
         self.update_state()
+        return True
 
     def _connect(self) -> bool:
+        _LOGGER.debug(f'Connecting to {self._host_ip} on port {self._host_port}')
         try:
             self._sock.connect((self._host_ip, self._host_port))
-        except TimeoutError:
-            print("Could not connect to airtouch 2 server")
+        except (OSError) as e:
+            _LOGGER.warning(f"Could not connect to host {self._host_ip}")
+            if isinstance(e, socket.gaierror):
+                pass
+            elif e.errno not in (errno.EHOSTUNREACH, errno.ECONNREFUSED,  errno.ETIMEDOUT):
+                raise e
             return False
-        print("Connected to airtouch 2 server")
+        _LOGGER.debug("Connected to airtouch 2 server")
         return True
 
     def _stop_common(self):
         if self._active:
             self._stop_threads = True
-            print("Closing socket...")
+            _LOGGER.debug("Closing socket...")
             self._sock.shutdown(socket.SHUT_RDWR)
             self._sock.close()
+            self._data_updated.clear()
             self._new_response_or_command.set()
+
 
     def _stop_and_join_main_thread(self):
         self._stop_common()
@@ -59,18 +78,28 @@ class AT2Client:
 
     def stop(self):
         self._stop_common()
-        print("Joining threads...")
+        _LOGGER.debug("Joining threads...")
         for t in self._threads:
             t.join()
         self._active = False
-        print("Shutdown successful")
+        _LOGGER.debug("Shutdown successful")
+
+    def add_callback(self, func: Callable):
+        self._callbacks.append(func)
+        def remove_callback() -> None:
+            if func in self._callbacks:
+                self._callbacks.remove(func)
+
+        return remove_callback
 
     def send_command(self, command: CommandMessage) -> None:
         self._cmd_queue.put(command)
         self._new_response_or_command.set()
 
     def update_state(self):
+        self._data_updated.clear()
         self.send_command(RequestState())
+        self._data_updated.wait()
 
     def _await_response(self) -> bytes:
         # taken (almost) straight from https://docs.python.org/3/howto/sockets.html
@@ -79,38 +108,38 @@ class AT2Client:
         while bytes_recd < MessageLength.RESPONSE:
             chunk = self._sock.recv(MessageLength.RESPONSE - bytes_recd) if not self._stop_threads else b''
             if chunk == b'':
-                print("Socket connection broken")
+                _LOGGER.debug("Socket closed/broken")
                 break
             chunks.append(chunk)
             bytes_recd = bytes_recd + len(chunk)
         return b''.join(chunks)
 
     def _handle_incoming(self) -> None:
-        socket_broken = False
         while not self._stop_threads:
             resp = self._await_response()
             if len(resp) == 0:
-                socket_broken = True
+                self._socket_broken = True
                 break
             if len(resp) != MessageLength.RESPONSE:
-                print("Invalid response, skipping")
+                _LOGGER.warning("Received invalid response, ignoring")
                 continue
-            print("handle_incoming received new response")
+            _LOGGER.debug("handle_incoming received new response")
             self._last_response = ResponseMessage(resp)
             self._new_response.set()
             self._new_response_or_command.set()
 
-        if not self._stop_threads and socket_broken:
-            print("Socket connection was broken, trying to recover...")
-            print("Stopping main thread...")
+        if not self._stop_threads and self._socket_broken:
+            _LOGGER.warning("Socket connection was broken, trying to recover...")
+            _LOGGER.debug("Stopping main thread...")
             self._stop_and_join_main_thread()
-            print("Restarting client...")
+            _LOGGER.debug("Restarting client...")
             # get a new socket
             self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self._socket_broken = False
             self.start()
 
     def _process_last_response(self):
-        # actually only process if we have a new one
+        # only process if we have a new one
         if self._last_response:
             resp = self._last_response
             self._last_response = None
@@ -118,34 +147,38 @@ class AT2Client:
             self._new_response_or_command.clear()
             # check message if there are 1 or 2 aircons - not sure how to do this yet
             # do the stuff, update aircons, zones etc...
-            if not self._aircons:
-                self._aircons.append(AT2Aircon(0, self, resp))
-                print(self._aircons[0])
+            if not self.aircons:
+                self.aircons.append(AT2Aircon(0, self, resp))
+                _LOGGER.debug(self.aircons[0])
             else:
-                for aircon in self._aircons:
+                for aircon in self.aircons:
                     aircon.update(resp)
-                    print(aircon)
+                    _LOGGER.debug(aircon)
+            self._data_updated.set()
+            for func in self._callbacks:
+                func()
 
     def _main_loop(self) -> None:
         """Main loop"""
         while not self._stop_threads:
             # wait for either a server message to be emitted or a command to be put on the queue
-            print("Waiting for something to happen")
+            _LOGGER.debug("Waiting for new data to receive or command to send")
             self._new_response_or_command.wait()
-            print("Something happened")
+            _LOGGER.debug("Received command or response")
             # process a message if that's what triggered the event
             self._process_last_response()
             
             # process commands if that's what triggered the event
-            while self._cmd_queue.qsize() > 0:
-                print("There are commands in the queue")
+            while self._cmd_queue.qsize() > 0 and not self._socket_broken:
+                _LOGGER.debug("There are commands in the queue")
                 try:
                     cmd = self._cmd_queue.get(block=False)
                 except Empty:
-                    print("command queue was empty")
+                    _LOGGER.debug("Command queue was empty")
                     break
                 self._new_response.clear()
-                print(f"Sending {cmd.__class__.__name__}")
-                self._sock.sendall(cmd.serialize())
-                self._new_response.wait()
-                self._process_last_response()
+                _LOGGER.debug(f"Sending {cmd.__class__.__name__}")
+                if not self._socket_broken:
+                    self._sock.sendall(cmd.serialize())
+                    self._new_response.wait()
+                    self._process_last_response()

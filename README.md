@@ -1,4 +1,4 @@
-# airtouch2-python
+# airtouch2_python
 In-development Python client for the Polyaire AirTouch 2 airconditioning system
 
 ## Thanks to
