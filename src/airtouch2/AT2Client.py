@@ -51,7 +51,7 @@ class AT2Client:
         _LOGGER.debug(f'Connecting to {self._host_ip} on port {self._host_port}')
         try:
             self._sock.connect((self._host_ip, self._host_port))
-        except (OSError) as e:
+        except OSError as e:
             _LOGGER.warning(f"Could not connect to host {self._host_ip}")
             if isinstance(e, socket.gaierror):
                 pass
@@ -65,7 +65,12 @@ class AT2Client:
         if self._active:
             self._stop_threads = True
             _LOGGER.debug("Closing socket...")
-            self._sock.shutdown(socket.SHUT_RDWR)
+            try:
+                self._sock.shutdown(socket.SHUT_RDWR)
+            except OSError as e:
+                if e.errno not in (errno.ECONNABORTED,  errno.ECONNRESET, errno.ENOTCONN, errno.ESHUTDOWN, errno.ECONNREFUSED):
+                    raise e
+                _LOGGER.debug(f"Socket shutdown() call failed\nOSError: [Errno {e.errno}] {e.strerror}")
             self._sock.close()
             self._data_updated.clear()
             self._new_response_or_command.set()
