@@ -4,12 +4,15 @@ import logging
 
 from threading import Thread, Event
 from queue import Empty, Queue
+from time import sleep
 from typing import Callable
 
 from airtouch2.AT2Aircon import AT2Aircon
 
 from airtouch2.protocol.constants import MessageLength
 from airtouch2.protocol.messages import CommandMessage, RequestState, ResponseMessage
+
+SocketClosedErrors = (errno.ECONNABORTED,  errno.ECONNRESET, errno.ENOTCONN, errno.ESHUTDOWN, errno.ECONNREFUSED)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -68,7 +71,7 @@ class AT2Client:
             try:
                 self._sock.shutdown(socket.SHUT_RDWR)
             except OSError as e:
-                if e.errno not in (errno.ECONNABORTED,  errno.ECONNRESET, errno.ENOTCONN, errno.ESHUTDOWN, errno.ECONNREFUSED):
+                if e.errno not in SocketClosedErrors:
                     raise e
                 _LOGGER.debug(f"Socket shutdown() call failed\nOSError: [Errno {e.errno}] {e.strerror}")
             self._sock.close()
@@ -111,7 +114,12 @@ class AT2Client:
         chunks = []
         bytes_recd = 0
         while bytes_recd < MessageLength.RESPONSE:
-            chunk = self._sock.recv(MessageLength.RESPONSE - bytes_recd) if not self._stop_threads else b''
+            try:
+                chunk = self._sock.recv(MessageLength.RESPONSE - bytes_recd) if not self._stop_threads else b''
+            except OSError as e:
+                if e.errno not in SocketClosedErrors:
+                    raise e
+                chunk=b''
             if chunk == b'':
                 _LOGGER.debug("Socket closed/broken")
                 break
@@ -134,14 +142,21 @@ class AT2Client:
             self._new_response_or_command.set()
 
         if not self._stop_threads and self._socket_broken:
-            _LOGGER.warning("Socket connection was broken, trying to recover...")
+            _LOGGER.debug("Socket connection was broken, trying to recover...")
             _LOGGER.debug("Stopping main thread...")
             self._stop_and_join_main_thread()
             _LOGGER.debug("Restarting client...")
             # get a new socket
             self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self._socket_broken = False
-            self.start()
+            retries = 0
+            while not self.start():
+                self._sock.close()
+                sleep(0.001 * (10**retries) if retries < 4 else 10)
+                self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                retries+=1
+                if not retries % 50:
+                    _LOGGER.debug("Server is not responding, will continue trying to reconnect every 10s")
 
     def _process_last_response(self):
         # only process if we have a new one
