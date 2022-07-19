@@ -1,5 +1,10 @@
 from airtouch2 import AT2Client
 from airtouch2 import ACFanSpeed, ACMode
+import logging
+import threading
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(threadName)s %(levelname)s: %(message)s')
+LOGGER = logging.getLogger()
+
 # For testing the client
 # type:
 #    ac power on/off
@@ -29,4 +34,7 @@ while inp != 'q':
             client.aircons[0].set_mode(ACMode[rem])
     if inp.startswith("get"):
         client.update_state()
+    if inp.startswith("lt"):
+        for thread in threading.enumerate(): 
+            print(thread.name)
 client.stop()

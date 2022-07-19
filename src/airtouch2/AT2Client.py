@@ -22,6 +22,7 @@ class AT2Client:
         self._host_ip: str = host
         self._host_port: int = 8899
         self._sock: socket.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._sock.settimeout(None)
         self._stop_threads: bool = True
         self._cmd_queue: Queue[CommandMessage] = Queue()
         self._last_response: ResponseMessage = None
@@ -32,7 +33,6 @@ class AT2Client:
         self._threads: list[Thread] = []
         self._active: bool = False
         self._callbacks: list[Callable] = []
-        self._sock.settimeout(None)
         self._socket_broken = False
         self._data_updated = Event()
 
@@ -53,6 +53,8 @@ class AT2Client:
     def _connect(self) -> bool:
         _LOGGER.debug(f'Connecting to {self._host_ip} on port {self._host_port}')
         try:
+            self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self._sock.settimeout(None)
             self._sock.connect((self._host_ip, self._host_port))
         except OSError as e:
             _LOGGER.warning(f"Could not connect to host {self._host_ip}")
@@ -60,8 +62,9 @@ class AT2Client:
                 pass
             elif e.errno not in (errno.EHOSTUNREACH, errno.ECONNREFUSED,  errno.ETIMEDOUT):
                 raise e
+            self._sock.close()
             return False
-        _LOGGER.debug("Connected to airtouch 2 server")
+        _LOGGER.debug("Connected to airtouch2 server")
         return True
 
     def _stop_common(self):
@@ -73,24 +76,42 @@ class AT2Client:
             except OSError as e:
                 if e.errno not in SocketClosedErrors:
                     raise e
-                _LOGGER.debug(f"Socket shutdown() call failed\nOSError: [Errno {e.errno}] {e.strerror}")
+                _LOGGER.debug(f"Socket shutdown() call failed:\n  OSError: [Errno {e.errno}] {e.strerror}")
             self._sock.close()
             self._data_updated.clear()
             self._new_response_or_command.set()
 
+    def _reset(self):
+        self._new_response_or_command.clear()
+        self._new_response.clear()
+        self._data_updated.clear()
+        self.aircons.clear()
+        self._threads.clear()
+        self._socket_broken = False
+        self._active = False
+        self._last_response = None
+        self._stop_threads = True
+        self.system_name = "UNKNOWN"
+        while not self._cmd_queue.empty():
+            try:
+                self._cmd_queue.get_nowait()
+            except Empty:
+                pass
 
     def _stop_and_join_main_thread(self):
         self._stop_common()
+        _LOGGER.debug("Joining main thread")
         self._threads[1].join()
-        self._active = False
+        self._reset()
 
     def stop(self):
         self._stop_common()
         _LOGGER.debug("Joining threads...")
         for t in self._threads:
             t.join()
-        self._active = False
+        self._reset()
         _LOGGER.debug("Shutdown successful")
+
 
     def add_callback(self, func: Callable):
         self._callbacks.append(func)
@@ -143,17 +164,11 @@ class AT2Client:
 
         if not self._stop_threads and self._socket_broken:
             _LOGGER.debug("Socket connection was broken, trying to recover...")
-            _LOGGER.debug("Stopping main thread...")
             self._stop_and_join_main_thread()
             _LOGGER.debug("Restarting client...")
-            # get a new socket
-            self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self._socket_broken = False
             retries = 0
             while not self.start():
-                self._sock.close()
                 sleep(0.001 * (10**retries) if retries < 4 else 10)
-                self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 retries+=1
                 if not retries % 50:
                     _LOGGER.debug("Server is not responding, will continue trying to reconnect every 10s")
@@ -184,7 +199,7 @@ class AT2Client:
             # wait for either a server message to be emitted or a command to be put on the queue
             _LOGGER.debug("Waiting for new data to receive or command to send")
             self._new_response_or_command.wait()
-            _LOGGER.debug("Received command or response")
+            _LOGGER.debug("Main loop waiter Event triggered")
             # process a message if that's what triggered the event
             self._process_last_response()
             
