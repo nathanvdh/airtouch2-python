@@ -191,6 +191,7 @@ class AT2Client:
                     _LOGGER.debug(aircon)
             self._data_updated.set()
             for func in self._callbacks:
+                _LOGGER.debug("Triggering callback")
                 func()
 
     def _main_loop(self) -> None:
