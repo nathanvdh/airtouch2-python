@@ -67,28 +67,21 @@ class AT2Client:
         _LOGGER.debug("Connected to airtouch2 server")
         return True
 
-    def _stop_common(self):
-        if self._active:
-            self._stop_threads = True
-            _LOGGER.debug("Closing socket...")
-            try:
-                self._sock.shutdown(socket.SHUT_RDWR)
-            except OSError as e:
-                if e.errno not in SocketClosedErrors:
-                    raise e
-                _LOGGER.debug(f"Socket shutdown() call failed:\n  OSError: [Errno {e.errno}] {e.strerror}")
-            self._sock.close()
-            self._data_updated.clear()
-            self._new_response_or_command.set()
+    def _close_socket(self):
+        try:
+            self._sock.shutdown(socket.SHUT_RDWR)
+        except OSError as e:
+            if e.errno not in SocketClosedErrors:
+                raise e
+            _LOGGER.debug(f"Socket shutdown() call failed:\n  OSError: [Errno {e.errno}] {e.strerror}")
+        self._sock.close()
 
     def _reset(self):
         self._new_response_or_command.clear()
         self._new_response.clear()
         self._data_updated.clear()
         self.aircons.clear()
-        self._threads.clear()
         self._socket_broken = False
-        self._active = False
         self._last_response = None
         self._stop_threads = True
         self.system_name = "UNKNOWN"
@@ -98,19 +91,22 @@ class AT2Client:
             except Empty:
                 pass
 
-    def _stop_and_join_main_thread(self):
-        self._stop_common()
-        _LOGGER.debug("Joining main thread")
-        self._threads[1].join()
-        self._reset()
-
     def stop(self):
-        self._stop_common()
-        _LOGGER.debug("Joining threads...")
-        for t in self._threads:
-            t.join()
-        self._reset()
-        _LOGGER.debug("Shutdown successful")
+        if self._active:
+            self._stop_threads = True
+            _LOGGER.debug("Closing socket...")
+            self._close_socket()
+            self._data_updated.clear()
+            self._new_response_or_command.set()
+            _LOGGER.debug("Joining threads...")
+            for t in self._threads:
+                t.join()
+            self._reset()
+            self._active = False
+            _LOGGER.debug("Shutdown successful")
+
+        else:
+            _LOGGER.debug("stop() called when client already inactive")
 
 
     def add_callback(self, func: Callable):
@@ -129,6 +125,18 @@ class AT2Client:
         self._data_updated.clear()
         self.send_command(RequestState())
         self._data_updated.wait()
+
+    def _reconnect(self) -> None:
+        _LOGGER.debug("Reconnecting client...")
+        self._close_socket()
+        self._reset()
+        retries = 0
+        while not self._connect():
+            sleep(0.001 * (10**retries) if retries < 4 else 10)
+            retries+=1
+            if not retries % 50 or retries == 4:
+                _LOGGER.debug("Server is not responding, will continue trying to reconnect every 10s")
+        self.update_state()
 
     def _await_response(self) -> bytes:
         # taken (almost) straight from https://docs.python.org/3/howto/sockets.html
@@ -150,59 +158,54 @@ class AT2Client:
 
     def _handle_incoming(self) -> None:
         while not self._stop_threads:
-            resp = self._await_response()
-            if len(resp) == 0:
-                self._socket_broken = True
-                break
-            if len(resp) != MessageLength.RESPONSE:
-                _LOGGER.warning("Received invalid response, ignoring")
-                continue
-            _LOGGER.debug("handle_incoming received new response")
-            self._last_response = ResponseMessage(resp)
-            self._new_response.set()
-            self._new_response_or_command.set()
+            while not self._socket_broken:
+                resp = self._await_response()
+                if len(resp) == 0:
+                    self._socket_broken = True
+                    break
+                if len(resp) != MessageLength.RESPONSE:
+                    _LOGGER.warning("Received invalid response, ignoring")
+                    continue
+                _LOGGER.debug("Received new valid response")
+                self._last_response = ResponseMessage(resp)
+                self._new_response.set()
+                self._new_response_or_command.set()
 
-        if not self._stop_threads and self._socket_broken:
-            _LOGGER.debug("Socket connection was broken, trying to recover...")
-            self._stop_and_join_main_thread()
-            _LOGGER.debug("Restarting client...")
-            retries = 0
-            while not self.start():
-                sleep(0.001 * (10**retries) if retries < 4 else 10)
-                retries+=1
-                if not retries % 50:
-                    _LOGGER.debug("Server is not responding, will continue trying to reconnect every 10s")
+            if not self._stop_threads and self._socket_broken:
+                _LOGGER.debug("Socket connection was broken")
+                self._reconnect
+
+
 
     def _process_last_response(self):
-        # only process if we have a new one
-        if self._last_response:
-            resp = self._last_response
-            self._last_response = None
-            self._new_response.clear()
-            self._new_response_or_command.clear()
-            # check message if there are 1 or 2 aircons - not sure how to do this yet
-            # do the stuff, update aircons, zones etc...
-            if not self.aircons:
-                self.aircons.append(AT2Aircon(0, self, resp))
-                _LOGGER.debug(self.aircons[0])
-            else:
-                for aircon in self.aircons:
-                    aircon.update(resp)
-                    _LOGGER.debug(aircon)
-            self._data_updated.set()
-            for func in self._callbacks:
-                _LOGGER.debug("Triggering callback")
-                func()
+        self._new_response.clear()
+        self._new_response_or_command.clear()
+        resp = self._last_response
+        self._last_response = None
+        # check message if there are 1 or 2 aircons - not sure how to do this yet
+        # do the stuff, update aircons, zones etc...
+        if not self.aircons:
+            self.aircons.append(AT2Aircon(0, self, resp))
+            _LOGGER.debug(self.aircons[0])
+        else:
+            for aircon in self.aircons:
+                aircon.update(resp)
+                _LOGGER.debug(aircon)
+        self._data_updated.set()
+        for func in self._callbacks:
+            _LOGGER.debug("Triggering callback")
+            func()
 
     def _main_loop(self) -> None:
         """Main loop"""
         while not self._stop_threads:
             # wait for either a server message to be emitted or a command to be put on the queue
-            _LOGGER.debug("Waiting for new data to receive or command to send")
+            _LOGGER.debug("Waiting for new data to arrive or command to send")
             self._new_response_or_command.wait()
             _LOGGER.debug("Main loop waiter Event triggered")
             # process a message if that's what triggered the event
-            self._process_last_response()
+            if self._last_response:
+                self._process_last_response()
             
             # process commands if that's what triggered the event
             while self._cmd_queue.qsize() > 0 and not self._socket_broken:
@@ -210,7 +213,7 @@ class AT2Client:
                 try:
                     cmd = self._cmd_queue.get(block=False)
                 except Empty:
-                    _LOGGER.debug("Command queue was empty")
+                    _LOGGER.debug("Tried to get command but queue was empty")
                     break
                 self._new_response.clear()
                 _LOGGER.debug(f"Sending {cmd.__class__.__name__}")
