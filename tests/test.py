@@ -11,7 +11,9 @@ LOGGER = logging.getLogger()
 #    ac temp [value in deg C]
 #    get (get a response message and update the local AC object's state)
 client  = AT2Client("192.168.1.21")
-client.start()
+if not client.start():
+    LOGGER.warning("Client did not start")
+    exit()
 inp = '\0'
 while inp != 'q':
     inp = input()
