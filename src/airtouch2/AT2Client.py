@@ -90,7 +90,6 @@ class AT2Client:
         self._new_response_or_command.clear()
         self._new_response.clear()
         self._data_updated.clear()
-        self.aircons.clear()
         self._socket_broken = False
         self._last_response = None
         self.system_name = "UNKNOWN"
