@@ -46,10 +46,10 @@ class AT2Aircon:
     def _turn_on_off(self, on: bool):
         if self.on != on:
             self._client.send_command(ToggleAC(self.number))
-    
+
     def turn_off(self):
         self._turn_on_off(False)
-    
+
     def turn_on(self):
         self._turn_on_off(True)
 
@@ -71,4 +71,3 @@ class AT2Aircon:
         Set Temp:\t{self.set_temp}
         Manufacturer:\t{self.manufacturer}
         """
-        

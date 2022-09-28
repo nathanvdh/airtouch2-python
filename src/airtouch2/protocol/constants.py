@@ -6,9 +6,6 @@ class MessageLength(IntEnum):
     COMMAND = 13
     RESPONSE = 395
 
-# remove stuff from here if it's only ever used once
-# also split it into a few different, sensically grouped enums rather
-# than encompassing everything here (I've done this now with CommandMessageType)
 class CommandMessageConstants(IntEnum):
     BYTE_0 = 85                  # Byte 0 of command always fixed
     BYTE_2 = 12                  # Byte 2 of command always fixed
@@ -23,8 +20,8 @@ class CommandMessageType(IntEnum):
     ZONE_CONROL = 129
     AC_CONTROL = 134
 
-# Go in byte 4 of CommandMessageType.AC_CONTROL messages 
-class ACControlCommands:
+# Go in byte 4 of CommandMessageType.AC_CONTROL messages
+class ACControlCommands(IntEnum):
     SET_MODE = 129
     SET_FAN_SPEED = 130
     TEMP_DEC = 147
@@ -46,7 +43,7 @@ class ResponseMessageOffsets(IntEnum):
     ZONE_STATUSES_START = 228
     # Zone strengths are 1 byte each
     ZONE_STRENGTHS_START = 276
-    
+
     # System name is 16 bytes (ResponseMessageConstants.LONG_STRING_LENGTH)
     SYSTEM_NAME = 324
 

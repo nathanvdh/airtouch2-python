@@ -36,6 +36,6 @@ class ACManufacturer(IntEnum):
     SAMSUNG = 8
     TOSHIBA = 9
     MITSUBISHI_HEAVY_IND = 10
-        
+
     def __str__(self):
         return self._name_

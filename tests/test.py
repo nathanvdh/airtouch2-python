@@ -2,7 +2,7 @@ from airtouch2 import AT2Client
 from airtouch2 import ACFanSpeed, ACMode
 import logging
 import threading
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(threadName)s %(levelname)s: %(message)s')
+logging.basicConfig(filename='airtouch2.log',filemode='a', level=logging.DEBUG, format='%(asctime)s %(threadName)s %(levelname)s: %(message)s')
 LOGGER = logging.getLogger()
 
 # For testing the client
@@ -10,7 +10,9 @@ LOGGER = logging.getLogger()
 #    ac power on/off
 #    ac temp [value in deg C]
 #    get (get a response message and update the local AC object's state)
-client  = AT2Client("192.168.1.21")
+ip = input('Enter ip address of airtouch2 (e.g. 192.168.1.15): ')
+client  = AT2Client(ip, dump=True)
+
 if not client.start():
     LOGGER.warning("Client did not start")
     exit()
@@ -37,6 +39,6 @@ while inp != 'q':
     if inp.startswith("get"):
         client.update_state()
     if inp.startswith("lt"):
-        for thread in threading.enumerate(): 
+        for thread in threading.enumerate():
             print(thread.name)
 client.stop()

@@ -22,7 +22,7 @@ _LOGGER = logging.getLogger(__name__)
 
 class AT2Client:
 
-    def __init__(self, host: str):
+    def __init__(self, host: str, dump: bool=False):
         self._host_ip: str = host
         self._host_port: int = 8899
         self._sock: socket.socket = socket.socket(
@@ -40,6 +40,7 @@ class AT2Client:
         self._callbacks: list[Callable] = []
         self._socket_broken = False
         self._data_updated = Event()
+        self._dump = dump
 
     def __del__(self):
         if self._active:
@@ -87,6 +88,12 @@ class AT2Client:
         self._sock.close()
 
     def _reset(self):
+        # Originally in here I was also resetting self.aircons. In the context of this
+        # client its fine, it will find them again when it gets a response message.
+        # However the homeassistant entity is created with a reference to an aircon
+        # which is then cleared so either it can't be cleared (hence why I removed it)
+        # or there needs to be some callback that updates the homeassistant entity with
+        # the new objet.
         self._new_response_or_command.clear()
         self._new_response.clear()
         self._data_updated.clear()
@@ -183,6 +190,9 @@ class AT2Client:
                 self._last_response = ResponseMessage(resp)
                 self._new_response.set()
                 self._new_response_or_command.set()
+                if self._dump:
+                    with open('last_response.dump', 'wb') as f:
+                        f.write(resp)
 
             if not self._stop_threads and self._socket_broken:
                 _LOGGER.debug("Socket connection was broken")
