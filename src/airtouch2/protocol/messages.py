@@ -1,7 +1,7 @@
 from __future__ import annotations
 from abc import ABC
 from airtouch2.protocol.constants import ACControlCommands, CommandMessageConstants, CommandMessageType, MessageLength, ResponseMessageConstants, ResponseMessageOffsets
-from airtouch2.protocol.enums import ACFanSpeed, ACManufacturer, ACMode
+from airtouch2.protocol.enums import ACFanSpeedReference, ACBrand, ACMode
 from sys import maxsize as MAX_INT
 
 class Message(ABC):
@@ -11,7 +11,7 @@ class Message(ABC):
     def add_checksum(self, serial_msg: bytearray) -> bytearray:
         serial_msg[self.length-1] = self.checksum(serial_msg)
         return serial_msg
-    
+
     @staticmethod
     def checksum(serial_msg: bytearray) -> int:
         sum: int = 0
@@ -23,7 +23,7 @@ class Message(ABC):
 class CommandMessage(Message):
     """ Command message base class from which all airtouch2 command messages are derived"""
     length: MessageLength = MessageLength.COMMAND
-    
+
     # command messages are only sent so only need to be serialized
     def serialize(self, prefilled_msg: bytearray) -> bytearray:
         prefilled_msg[0] = CommandMessageConstants.BYTE_0
@@ -32,7 +32,7 @@ class CommandMessage(Message):
 
 class RequestState(CommandMessage):
     """ Command to request the state of the airtouch 2 system"""
-    
+
     def serialize(self) -> bytearray:
         serial_msg: bytearray = bytearray(self.length)
         serial_msg[1] = CommandMessageType.REQUEST_STATE
@@ -62,7 +62,7 @@ class ChangeSetTemperature(ACControlCommand):
 
 class ToggleAC(ACControlCommand):
     """Command to toggle an AC on or off"""
-    
+
     def serialize(self) -> bytearray:
         serial_msg: bytearray = bytearray(self.length)
         serial_msg[4] = CommandMessageConstants.TOGGLE
@@ -70,10 +70,10 @@ class ToggleAC(ACControlCommand):
 
 # needs investigation
 class SetFanSpeed(ACControlCommand):
-    """Command to set the AC fan speed to one of those in ACFanSpeed"""
-    def __init__(self, target_ac_number: int, fan_speed: ACFanSpeed):
+    """Command to set the AC fan speed"""
+    def __init__(self, target_ac_number: int, fan_speed: int):
         super().__init__(target_ac_number)
-        self.fan_speed: ACFanSpeed = fan_speed
+        self.fan_speed: int = fan_speed
 
     def serialize(self) -> bytearray:
         serial_msg: bytearray = bytearray(self.length)
@@ -86,7 +86,7 @@ class SetMode(ACControlCommand):
     def __init__(self, target_ac_number: int, mode: ACMode):
         super().__init__(target_ac_number)
         self.mode: ACMode = mode
-    
+
     def serialize(self) -> bytearray:
         serial_msg: bytearray = bytearray(self.length)
         serial_msg[4] = ACControlCommands.SET_MODE
@@ -95,23 +95,30 @@ class SetMode(ACControlCommand):
 
 class ResponseMessage(Message):
     """ The airtouch 2 response message (there is only one) that contains all the information about the current state of the system"""
-    
     length: MessageLength = MessageLength.RESPONSE
 
-    # only getting fundamental things for AC1 for now
+    # only getting things for AC1 for now
     def __init__(self, raw_response: bytes):
         super().__init__()
-        # seems to be x000_1111 - x is on/off. This is different to what Luke describes.
+
         status = raw_response[ResponseMessageOffsets.AC1_STATUS]
+        # MS bit is on/off
         self.ac_active = [(status & 0x80 > 0)]
-        self.ac_status = [(status & 0x7F)]
+        # Bit 7 is whether AC is in 'safety' mode
+        self.ac_safety = [(status & 0x40 > 0)]
+        # remainder is unknown or not important
+
         # simply 0-4, see ACMode enum
         self.ac_mode = [ACMode(raw_response[ResponseMessageOffsets.AC1_MODE])]
-        # 0100_0xxx - least significant byte is 0 to 4 - see ACFanSpeed enum
-        self.ac_fan_speed = [ACFanSpeed(raw_response[ResponseMessageOffsets.AC1_FAN_SPEED] & 0x0F)]
+        # most signficant byte is # of speeds, least significant byte is speed (the meaning of which depends), see AT2Aircon::_set_true_and_supported_fan_speed()
+        self.ac_num_fan_speeds = [(raw_response[ResponseMessageOffsets.AC1_FAN_SPEED] & 0xF0) >> 4]
+        self.ac_fan_speed = [raw_response[ResponseMessageOffsets.AC1_FAN_SPEED] & 0x0F]
+
         self.ac_set_temp = [raw_response[ResponseMessageOffsets.AC1_SET_TEMP]]
         self.ac_ambient_temp = [raw_response[ResponseMessageOffsets.AC1_AMBIENT_TEMP]]
-        self.ac_manufacturer = [ACManufacturer(raw_response[ResponseMessageOffsets.AC1_MANUFACTURER])]
-        self.ac_name = [raw_response[ResponseMessageOffsets.AC1_NAME_START:ResponseMessageOffsets.AC1_NAME_START+ResponseMessageConstants.SHORT_STRING_LENGTH].decode()]
-        #self.zones = {}
-        self.system_name = raw_response[ResponseMessageOffsets.SYSTEM_NAME:ResponseMessageOffsets.SYSTEM_NAME+ResponseMessageConstants.LONG_STRING_LENGTH].decode()
+
+        self.ac_brand = [ACBrand(raw_response[ResponseMessageOffsets.AC1_BRAND])]
+        self.ac_gateway_id = [raw_response[ResponseMessageOffsets.AC1_GATEWAY_ID]]
+
+        self.ac_name = [raw_response[ResponseMessageOffsets.AC1_NAME_START:ResponseMessageOffsets.AC1_NAME_START+ResponseMessageConstants.SHORT_STRING_LENGTH].decode().split("\0")[0]]
+        self.system_name = raw_response[ResponseMessageOffsets.SYSTEM_NAME:ResponseMessageOffsets.SYSTEM_NAME+ResponseMessageConstants.LONG_STRING_LENGTH].decode().split("\0")[0]

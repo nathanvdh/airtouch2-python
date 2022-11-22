@@ -6,11 +6,14 @@ from threading import Thread, Event
 from queue import Empty, Queue
 from time import sleep
 from typing import Callable
+from datetime import datetime
 
 from airtouch2.AT2Aircon import AT2Aircon
 
 from airtouch2.protocol.constants import MessageLength
 from airtouch2.protocol.messages import CommandMessage, RequestState, ResponseMessage
+
+from airtouch2.diff_bytes import print_diff_with_addresses
 
 SocketClosedErrors = (errno.ECONNABORTED,  errno.ECONNRESET,
                       errno.ENOTCONN, errno.ESHUTDOWN, errno.ECONNREFUSED)
@@ -18,7 +21,6 @@ SocketClosedErrors = (errno.ECONNABORTED,  errno.ECONNRESET,
 NetworkOrHostDownErrors = (errno.EHOSTUNREACH, errno.ECONNREFUSED,  errno.ETIMEDOUT, errno.ENETDOWN, errno.ENETUNREACH, errno.ENETRESET, errno.ECONNABORTED)
 
 _LOGGER = logging.getLogger(__name__)
-
 
 class AT2Client:
 
@@ -30,7 +32,8 @@ class AT2Client:
         self._sock.settimeout(None)
         self._stop_threads: bool = True
         self._cmd_queue: Queue[CommandMessage] = Queue()
-        self._last_response: ResponseMessage = None
+        self.newest_response: ResponseMessage = None
+        self._previous_response: bytes = None
         self._new_response: Event = Event()
         self._new_response_or_command: Event = Event()
         self.aircons: list[AT2Aircon] = []
@@ -98,7 +101,7 @@ class AT2Client:
         self._new_response.clear()
         self._data_updated.clear()
         self._socket_broken = False
-        self._last_response = None
+        self.newest_response = None
         self.system_name = "UNKNOWN"
         # get rid of any commands on the queue
         while not self._cmd_queue.qsize() == 0:
@@ -187,12 +190,15 @@ class AT2Client:
                     _LOGGER.warning("Received invalid response, ignoring")
                     continue
                 _LOGGER.debug("Received new valid response")
-                self._last_response = ResponseMessage(resp)
+                self.newest_response = ResponseMessage(resp)
                 self._new_response.set()
                 self._new_response_or_command.set()
                 if self._dump:
-                    with open('last_response.dump', 'wb') as f:
+                    if self._previous_response:
+                        print_diff_with_addresses(self._previous_response, resp)
+                    with open('response_' + datetime.now().strftime("%m-%d-%Y_%H-%M-%S") + '.dump', 'wb') as f:
                         f.write(resp)
+                self._previous_response = resp
 
             if not self._stop_threads and self._socket_broken:
                 _LOGGER.debug("Socket connection was broken")
@@ -201,8 +207,8 @@ class AT2Client:
     def _process_last_response(self):
         self._new_response.clear()
         self._new_response_or_command.clear()
-        resp = self._last_response
-        self._last_response = None
+        resp = self.newest_response
+        self.newest_response = None
         # check message if there are 1 or 2 aircons - not sure how to do this yet
         # do the stuff, update aircons, zones etc...
         if not self.aircons:
@@ -224,7 +230,7 @@ class AT2Client:
             self._new_response_or_command.wait()
             _LOGGER.debug("Main loop waiter Event triggered")
             # process a message if that's what triggered the event
-            if self._last_response:
+            if self.newest_response:
                 self._process_last_response()
 
             # process commands if that's what triggered the event

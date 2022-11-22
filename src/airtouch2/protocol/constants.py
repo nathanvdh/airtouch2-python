@@ -49,18 +49,20 @@ class ResponseMessageOffsets(IntEnum):
 
     # perhaps should just store the first offset and iterate from 1st to 2nd
     AC1_STATUS = 354
-    AC2_STATUS = 355
+    #AC2_STATUS = 355
     AC1_MODE = 358
-    AC2_MODE = 359
+    #AC2_MODE = 359
     AC1_FAN_SPEED = 360
-    AC2_FAN_SPEED = 361
+    #AC2_FAN_SPEED = 361
     AC1_SET_TEMP = 362
-    AC2_SET_TEMP = 363
+    #AC2_SET_TEMP = 363
     AC1_AMBIENT_TEMP = 364
-    AC2_AMBIENT_TEMP = 365
-    AC1_MANUFACTURER = 356
-    AC2_MANUFACTURER = 357
+    #AC2_AMBIENT_TEMP = 365
+    AC1_BRAND = 356
+    #AC2_BRAND = 357
+    AC1_GATEWAY_ID = 368
+    #AC2_GATEWAY_ID = 171
     # AC names are 8 bytes (ResponseMessageConstants.SHORT_STRING_LENGTH)
     AC1_NAME_START = 370
-    AC2_NAME_START = 378
+    #AC2_NAME_START = 378
     HASH = 394

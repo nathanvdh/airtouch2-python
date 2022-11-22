@@ -1,5 +1,5 @@
 from airtouch2 import AT2Client
-from airtouch2 import ACFanSpeed, ACMode
+from airtouch2 import ACFanSpeedReference, ACMode
 import logging
 import threading
 logging.basicConfig(filename='airtouch2.log',filemode='a', level=logging.DEBUG, format='%(asctime)s %(threadName)s %(levelname)s: %(message)s')
@@ -32,10 +32,10 @@ while inp != 'q':
             client.aircons[0].set_set_temp(int(rem))
         if rem.startswith("fan"):
             rem = rem[3:].strip()
-            client.aircons[0].set_fan_speed(ACFanSpeed[rem])
+            client.aircons[0].set_fan_speed(ACFanSpeedReference(int(rem)))
         if rem.startswith("mode"):
             rem = rem[4:].strip()
-            client.aircons[0].set_mode(ACMode[rem])
+            client.aircons[0].set_mode(ACMode(int(rem)))
     if inp.startswith("get"):
         client.update_state()
     if inp.startswith("lt"):
