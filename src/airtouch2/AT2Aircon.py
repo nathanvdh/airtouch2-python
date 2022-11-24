@@ -34,18 +34,27 @@ class AT2Aircon:
     #   4 speed is always LOW, MED, HIGH, POWERFUL (EXCEPT for fujitsus with 4 speeds)
     #   3 speed is always LOW, MED, HIGH
     #   2 speed is always LOW, HIGH
-    # These seem reasonable assumptions based on the app decompiled code
-    def _set_true_and_supported_fan_speed(self, fan_speed: int, num_supported_speeds: int):
+    #   Daikins have no Auto
+    #   Gateway ID 0x14 has no Auto
+    #   Gateway IDs 0xFF with 3 speed have no Auto
+    # These are based on the app decompiled code
+    def _set_true_and_supported_fan_speed(self, fan_speed: int, num_supported_speeds: int, gateway_id: int):
         all_speeds: list[ACFanSpeedReference] = list(ACFanSpeedReference._member_map_.values())
         # Unsure if this is sufficent or if I need to check the second/other type of brand
         if self.brand == ACBrand.FUJITSU and num_supported_speeds == 4:
             self.supported_fan_speeds = all_speeds[:num_supported_speeds+1]
-        elif num_supported_speeds > 2:
-            self.supported_fan_speeds = [ACFanSpeedReference.AUTO] + all_speeds[2:2+num_supported_speeds]
-        elif num_supported_speeds == 2:
-            self.supported_fan_speeds = [ACFanSpeedReference.AUTO, ACFanSpeedReference.LOW, ACFanSpeedReference.HIGH]
-        elif num_supported_speeds < 2:
-            _LOGGER.warning(f"AC{self.number} reports less than 2 supported fan speeds, this is unusual - " + OPEN_ISSUE_TEXT)
+        else:
+            if (self.brand != ACBrand.DAIKIN and not (gateway_id == 0xFF and num_supported_speeds == 3) and gateway_id != 0x14):
+                self.supported_fan_speeds = [ACFanSpeedReference.AUTO]
+            else:
+                self.supported_fan_speeds = []
+
+            if num_supported_speeds > 2:
+                self.supported_fan_speeds += all_speeds[2:2+num_supported_speeds]
+            elif num_supported_speeds == 2:
+                self.supported_fan_speeds += [ACFanSpeedReference.LOW, ACFanSpeedReference.HIGH]
+            elif num_supported_speeds < 2:
+                _LOGGER.warning(f"AC{self.number} reports less than 2 supported fan speeds, this is unusual - " + OPEN_ISSUE_TEXT)
 
         if fan_speed < 5:
             self.fan_speed = self.supported_fan_speeds[fan_speed]
@@ -74,7 +83,7 @@ class AT2Aircon:
 
         num_fan_speeds = response_message.ac_num_fan_speeds[self.number]
         fan_speed = response_message.ac_fan_speed[self.number]
-        self._set_true_and_supported_fan_speed(fan_speed, num_fan_speeds)
+        self._set_true_and_supported_fan_speed(fan_speed, num_fan_speeds, gateway_id)
 
         # TODO: Handle this?
         if brand == ACBrand.NONE and gateway_id == 0:
