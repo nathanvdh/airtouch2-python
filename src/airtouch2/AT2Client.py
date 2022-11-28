@@ -173,7 +173,7 @@ class AT2Client:
                     raise e
                 chunk = b''
             if chunk == b'':
-                # socket broken
+                # socket broken or closed
                 break
             chunks.append(chunk)
             bytes_recd = bytes_recd + len(chunk)
