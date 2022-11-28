@@ -1,5 +1,6 @@
 from __future__ import annotations
 import logging
+from itertools import compress
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from airtouch2.AT2Client import AT2Client
@@ -11,23 +12,13 @@ OPEN_ISSUE_TEXT = "please open an issue and detail your system to me:\n\thttps:/
 
 _LOGGER = logging.getLogger(__name__)
 class AT2Aircon:
-    def __init__(self, number: int, client: AT2Client, response_message: ResponseMessage=None):
+    def __init__(self, number: int, client: AT2Client, response_message: ResponseMessage):
         self.number: int = number
         self._client: AT2Client = client
         if response_message:
             self.update(response_message)
         else:
-            self.system_name: str = "UNKNOWN"
-            self.name: str = "UNKNOWN"
-            self.brand: ACBrand = ACBrand.NONE
-            self.on: bool = False
-            self.safety: bool = False
-            self.mode: ACMode = ACMode.AUTO
-            self.num_fan_speeds: int = -1
-            self.fan_speed: ACFanSpeedReference = ACFanSpeedReference.AUTO
-            self.supported_fan_speeds: list[ACFanSpeedReference] = []
-            self.ambient_temp: int = -1
-            self.set_temp: int = -1
+            raise ValueError("Null response message provided")
 
     # TODO: read through app source code more and do this more properly
     # Currently I'm assuming:
@@ -75,12 +66,24 @@ class AT2Aircon:
 
     def update(self, response_message: ResponseMessage) -> None:
         self.system_name = response_message.system_name
+
+        # Flags
         self.on = response_message.ac_active[self.number]
         self.safety = response_message.ac_safety[self.number]
-        self.mode = response_message.ac_mode[self.number]
+        self.error = response_message.ac_error[self.number]
+        self.turbo = response_message.ac_turbo[self.number]
+        self.spill = response_message.ac_spill[self.number]
 
-        self.ambient_temp = response_message.ac_ambient_temp[self.number]
+        # Error code
+        self.error_code = response_message.ac_error_code[self.number]
+
+        # Temperatures
+        self.measured_temp = response_message.ac_measured_temp[self.number]
+        if (self.measured_temp <= 0):
+            self.measured_temp = response_message.touchpad_temp
         self.set_temp = response_message.ac_set_temp[self.number]
+
+        # Brand
         brand = response_message.ac_brand[self.number]
         gateway_id = response_message.ac_gateway_id[self.number]
         # Brand based on gateway ID takes priority
@@ -93,6 +96,8 @@ class AT2Aircon:
         else:
             self.brand = brand
 
+        # Modes
+        self.mode = response_message.ac_mode[self.number]
         num_fan_speeds = response_message.ac_num_fan_speeds[self.number]
         fan_speed_val = response_message.ac_fan_speed[self.number]
         self._set_supported_fan_speeds(num_fan_speeds, gateway_id)
@@ -132,22 +137,26 @@ class AT2Aircon:
     def set_mode(self, mode: ACMode):
         self._client.send_command(SetMode(self.number, mode))
 
+    def get_status_strings(self):
+        flags = [self.error, self.safety, self.spill, self.turbo]
+        flag_names = ['ERROR', 'SAFETY', 'SPILL', 'TURBO']
+        statuses = list(compress(flag_names, flags))
+        if not statuses:
+            statuses.append('NORMAL')
+        return statuses
+
     def __str__(self):
-        status_string = ''
-        if self.safety:
-            status_string += "SAFETY"
-        else:
-            status_string += "NORMAL"
         return f"""
         System Name:\t\t{self.system_name}
         AC Number:\t\t{self.number}
         AC Name:\t\t{self.name}
         On:\t\t\t{self.on}
-        Status:\t\t\t{status_string}
+        Status:\t\t\t{self.get_status_strings()}
+        Error Code:\t\t{self.error_code}
         Mode:\t\t\t{self.mode}
         Fan Speed:\t\t{self.fan_speed}
         Supported Speeds:\t{[s.name for s in self.supported_fan_speeds]}
-        Ambient Temp:\t\t{self.ambient_temp}
+        Measured Temp:\t\t{self.measured_temp}
         Set Temp:\t\t{self.set_temp}
         Brand:\t\t\t{self.brand}
         """

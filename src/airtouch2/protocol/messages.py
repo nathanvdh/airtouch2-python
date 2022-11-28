@@ -104,9 +104,18 @@ class ResponseMessage(Message):
         status = raw_response[ResponseMessageOffsets.AC1_STATUS]
         # MS bit is on/off
         self.ac_active = [(status & 0x80 > 0)]
-        # Bit 7 is whether AC is in 'safety' mode
-        self.ac_safety = [(status & 0x40 > 0)]
-        # remainder is unknown or not important
+        # Bit 7 is whether AC is errored
+        self.ac_error = [(status & 0x40 > 0)]
+        self.ac_error_code = [raw_response[ResponseMessageOffsets.AC1_ERROR_CODE]]
+        # bit 4 is whether or not 'thermistor on AC' is checked (0 = checked)
+        self.ac_thermistor = [(status & 0x04 == 0)]
+        # lowest 3 bits are AC program number
+        #self.ac_program = [(status & 0x07)]
+
+        status2 = raw_response[ResponseMessageOffsets.ACs_STATUS]
+        self.ac_turbo = [(status2 & 0x20 > 0)]
+        self.ac_safety = [(status2 & 0x04 > 0)]
+        self.ac_spill = [(status2 & 0x02) > 0]
 
         # simply 0-4, see ACMode enum
         self.ac_mode = [ACMode(raw_response[ResponseMessageOffsets.AC1_MODE])]
@@ -115,7 +124,8 @@ class ResponseMessage(Message):
         self.ac_fan_speed = [raw_response[ResponseMessageOffsets.AC1_FAN_SPEED] & 0x0F]
 
         self.ac_set_temp = [raw_response[ResponseMessageOffsets.AC1_SET_TEMP]]
-        self.ac_ambient_temp = [raw_response[ResponseMessageOffsets.AC1_AMBIENT_TEMP]]
+        self.ac_measured_temp = [raw_response[ResponseMessageOffsets.AC1_MEASURED_TEMP]]
+        self.touchpad_temp = raw_response[ResponseMessageOffsets.TOUCHPAD_TEMP]
 
         self.ac_brand = [ACBrand(raw_response[ResponseMessageOffsets.AC1_BRAND])]
         self.ac_gateway_id = [raw_response[ResponseMessageOffsets.AC1_GATEWAY_ID]]

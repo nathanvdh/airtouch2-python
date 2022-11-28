@@ -33,7 +33,7 @@ class ResponseMessageConstants(IntEnum):
 
 # Thanks to home-assistant.io user Radebe2k
 class ResponseMessageOffsets(IntEnum):
-    # Header is 4 bytes
+    # Header is 2 bytes
     HEADER = 0
 
     # There are 16 zones
@@ -47,7 +47,10 @@ class ResponseMessageOffsets(IntEnum):
     # System name is 16 bytes (ResponseMessageConstants.LONG_STRING_LENGTH)
     SYSTEM_NAME = 324
 
-    # perhaps should just store the first offset and iterate from 1st to 2nd
+    # Contains isTurbo, isSafety, isSpill bits of the 2 ACs
+    ACs_STATUS = 299
+    TOUCHPAD_TEMP = 323 # I think?? Idk what happens when there's 2 touchpads then...
+    # On/Off, isError, 'Auto off' enabled, 'thermistor on AC', program number
     AC1_STATUS = 354
     #AC2_STATUS = 355
     AC1_MODE = 358
@@ -56,12 +59,14 @@ class ResponseMessageOffsets(IntEnum):
     #AC2_FAN_SPEED = 361
     AC1_SET_TEMP = 362
     #AC2_SET_TEMP = 363
-    AC1_AMBIENT_TEMP = 364
-    #AC2_AMBIENT_TEMP = 365
+    AC1_MEASURED_TEMP = 364
+    #AC2_MEASURED_TEMP = 365
     AC1_BRAND = 356
     #AC2_BRAND = 357
+    AC1_ERROR_CODE = 366
+    #AC2_ERROR_CODE = 367
     AC1_GATEWAY_ID = 368
-    #AC2_GATEWAY_ID = 171
+    #AC2_GATEWAY_ID = 369
     # AC names are 8 bytes (ResponseMessageConstants.SHORT_STRING_LENGTH)
     AC1_NAME_START = 370
     #AC2_NAME_START = 378
