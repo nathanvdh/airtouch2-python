@@ -9,9 +9,11 @@ from typing import Callable
 from datetime import datetime
 
 from airtouch2.AT2Aircon import AT2Aircon
+from airtouch2.AT2Group import AT2Group
 
 from airtouch2.protocol.constants import MessageLength
-from airtouch2.protocol.messages import CommandMessage, RequestState, ResponseMessage
+from airtouch2.protocol.messages import RequestState, ResponseMessage
+from airtouch2.protocol.messages.CommandMessage import CommandMessage
 
 from airtouch2.diff_bytes import print_diff_with_addresses
 
@@ -37,6 +39,7 @@ class AT2Client:
         self._new_response: Event = Event()
         self._new_response_or_command: Event = Event()
         self.aircons: list[AT2Aircon] = []
+        self.groups: list[AT2Group] = []
         self.system_name = "UNKNOWN"
         self._threads: list[Thread] = []
         self._active: bool = False
@@ -209,8 +212,8 @@ class AT2Client:
         self._new_response_or_command.clear()
         resp = self.newest_response
         self.newest_response = None
-        # check message if there are 1 or 2 aircons - not sure how to do this yet
-        # do the stuff, update aircons, zones etc...
+        # TODO: Check if dual unit system and handle 2 ACs
+        # Aircons / units
         if not self.aircons:
             self.aircons.append(AT2Aircon(0, self, resp))
             _LOGGER.debug(self.aircons[0])
@@ -218,6 +221,16 @@ class AT2Client:
             for aircon in self.aircons:
                 aircon.update(resp)
                 _LOGGER.debug(aircon)
+        # Groups
+        if not self.groups or len(self.groups) != resp.num_groups:
+            # TODO: callback to inform homeassistant
+            self.groups.clear()
+            for i in range(resp.num_groups):
+                self.groups.append(AT2Group(self, i, resp))
+        else:
+            for group in self.groups:
+                group.update(resp)
+                _LOGGER.debug(group)
         self._data_updated.set()
         for func in self._callbacks:
             func()

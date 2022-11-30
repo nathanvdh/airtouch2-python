@@ -1,4 +1,3 @@
-
 from enum import IntEnum
 
 class MessageLength(IntEnum):
@@ -7,25 +6,29 @@ class MessageLength(IntEnum):
     RESPONSE = 395
 
 class CommandMessageConstants(IntEnum):
-    BYTE_0 = 85                  # Byte 0 of command always fixed
-    BYTE_2 = 12                  # Byte 2 of command always fixed
-    TOGGLE = 128                 # Toggle on/off in byte 4
-    BYTE_5_GRP_POS = 1           # In Position dec/inc command, byte 5 is fixed
-    BYTE_4_GRP_POSDEC = 1        # Position decrement (5% down) in byte 4
-    BYTE_4_GRP_POSINC = 2        # Position increment (5% up) in byte 4
+    BYTE_0 = 85             # Byte 0 of command always fixed
+    BYTE_2 = 12             # Byte 2 of command always fixed
+    TOGGLE = 128            # toggle is common to both ACCommands and GroupCommands
 
 # Go in byte 1 of command messages
 class CommandMessageType(IntEnum):
     REQUEST_STATE = 1
-    ZONE_CONROL = 129
+    GROUP_CONTROL = 129
     AC_CONTROL = 134
 
 # Go in byte 4 of CommandMessageType.AC_CONTROL messages
-class ACControlCommands(IntEnum):
+class ACCommands(IntEnum):
     SET_MODE = 129
     SET_FAN_SPEED = 130
     TEMP_DEC = 147
     TEMP_INC = 163
+
+class GroupCommands(IntEnum):
+    CHANGE_DAMP = 1      # 1 goes in byte 5 for change damp
+    TOGGLE = 0           # 0 goes in byte 5 for toggle
+    DAMP_DEC = 1         # Damper decrement (10% down) in byte 4
+    DAMP_INC = 2         # Damper increment (10% up) in byte 4
+
 
 class ResponseMessageConstants(IntEnum):
     LONG_STRING_LENGTH = 16
@@ -35,24 +38,25 @@ class ResponseMessageConstants(IntEnum):
 class ResponseMessageOffsets(IntEnum):
     # Header is 2 bytes
     HEADER = 0
-
     # There are 16 zones
     # zone names are 8 bytes (ResponseMessageConstants.SHORT_STRING_LENGTH)
-    ZONE_NAMES_START = 100
+    GROUP_NAMES_START = 100
     # zone statuses are 1 byte each
-    ZONE_STATUSES_START = 228
+    GROUP_STATUSES_START = 228
     # Zone strengths are 1 byte each
-    ZONE_STRENGTHS_START = 276
-
-    # System name is 16 bytes (ResponseMessageConstants.LONG_STRING_LENGTH)
-    SYSTEM_NAME = 324
-
+    GROUP_DAMPS_START = 276
+    NUM_GROUPS = 292
+    TURBO_GROUP = 297
     # Contains isTurbo, isSafety, isSpill bits of the 2 ACs
     ACs_STATUS = 299
     TOUCHPAD_TEMP = 323 # I think?? Idk what happens when there's 2 touchpads then...
+    # System name is 16 bytes (ResponseMessageConstants.LONG_STRING_LENGTH)
+    SYSTEM_NAME = 324
     # On/Off, isError, 'Auto off' enabled, 'thermistor on AC', program number
     AC1_STATUS = 354
     #AC2_STATUS = 355
+    AC1_BRAND = 356
+    #AC2_BRAND = 357
     AC1_MODE = 358
     #AC2_MODE = 359
     AC1_FAN_SPEED = 360
@@ -61,8 +65,6 @@ class ResponseMessageOffsets(IntEnum):
     #AC2_SET_TEMP = 363
     AC1_MEASURED_TEMP = 364
     #AC2_MEASURED_TEMP = 365
-    AC1_BRAND = 356
-    #AC2_BRAND = 357
     AC1_ERROR_CODE = 366
     #AC2_ERROR_CODE = 367
     AC1_GATEWAY_ID = 368

@@ -36,6 +36,20 @@ while inp != 'q':
         if rem.startswith("mode"):
             rem = rem[4:].strip()
             client.aircons[0].set_mode(ACMode(int(rem)))
+    if inp.startswith("group"):
+        rem = inp[5:].strip()
+        if rem.startswith("on"):
+            rem = rem[2:].strip()
+            client.groups[int(rem)].turn_on()
+        elif rem.startswith("off"):
+            rem = rem[3:].strip()
+            client.groups[int(rem)].turn_off()
+        else:
+            [val, group_no] = rem.split()
+            i = int(group_no)
+            val = int(val)
+            print(f"Setting {i} to {val}")
+            client.groups[i].set_damp(val)
     if inp.startswith("get"):
         client.update_state()
     if inp.startswith("lt"):
