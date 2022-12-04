@@ -258,5 +258,6 @@ class AT2Client:
                 if not self._socket_broken:
                     _LOGGER.debug(f"Sending {cmd.__class__.__name__}")
                     self._sock.sendall(cmd.serialize())
-                    self._new_response.wait()
-                    self._process_last_response()
+                    self._new_response.wait(timeout=5)
+                    if self.newest_response:
+                        self._process_last_response()
