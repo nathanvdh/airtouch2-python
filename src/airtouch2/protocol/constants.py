@@ -42,9 +42,12 @@ class ResponseMessageOffsets(IntEnum):
     # zone names are 8 bytes (ResponseMessageConstants.SHORT_STRING_LENGTH)
     GROUP_NAMES_START = 100
     # zone statuses are 1 byte each
-    GROUP_STATUSES_START = 228
+    ZONE_STATUSES_START = 228
+    # In order, each group and the number of zones it consists of
+    # Zones must be in consecutive order
+    GROUP_ZONES_START = 244
     # Zone strengths are 1 byte each
-    GROUP_DAMPS_START = 276
+    ZONE_DAMPS_START = 276
     NUM_GROUPS = 292
     TURBO_GROUP = 297
     # Contains isTurbo, isSafety, isSpill bits of the 2 ACs

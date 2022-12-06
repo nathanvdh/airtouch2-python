@@ -19,10 +19,23 @@ class AT2Group:
 
     def update(self, response: ResponseMessage):
         self.name = response.group_names[self.number]
+        [start_zone, num_zones] = response.group_zones[self.number]
         # 0 to 10 steps of 10%
-        self.damp = response.group_damps[self.number]
-        self.on = response.group_ons[self.number]
-        self.spill = response.group_spills[self.number]
+        self.damp = response.zone_damps[start_zone]
+        self.spill = response.zone_spills[start_zone]
+        self.on = response.zone_ons[self.number]
+        mismatches: set[str] = set()
+        for i in range(start_zone+1, start_zone + num_zones):
+            # this group is spilling if any of its zones are
+            self.spill = response.zone_spills[i]
+            # these should match for all zones that comprise this group
+            if (self.damp != response.zone_damps[i]):
+                mismatches.add("open percents")
+            if (self.on != response.zone_ons[i]):
+                mismatches.add("on/offs")
+            if mismatches:
+                _LOGGER.warning(f"Zones of group '{self.name}' have mismatching {', '.join(mismatches)}")
+
         self.turbo = True if response.turbo_group == self.number else False
 
     def inc_dec_damp(self, inc: bool):

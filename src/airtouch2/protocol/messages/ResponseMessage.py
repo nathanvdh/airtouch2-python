@@ -44,9 +44,11 @@ class ResponseMessage(Message):
 
         # Group stuff
         self.num_groups = raw_response[ResponseMessageOffsets.NUM_GROUPS]
-        self.group_damps = [raw_response[offset] for offset in range(ResponseMessageOffsets.GROUP_DAMPS_START, ResponseMessageOffsets.GROUP_DAMPS_START+16)]
+        # list of tuples: (start_zone, num_zones)
+        self.group_zones = [(raw_response[offset] & 0xF0, raw_response[offset] & 0x0F) for offset in range(ResponseMessageOffsets.GROUP_ZONES_START, ResponseMessageOffsets.GROUP_ZONES_START + 16)]
+        self.zone_damps = [raw_response[offset] for offset in range(ResponseMessageOffsets.ZONE_DAMPS_START, ResponseMessageOffsets.ZONE_DAMPS_START+16)]
         self.group_names = [raw_response[offset:offset+ResponseMessageConstants.SHORT_STRING_LENGTH].decode().split("\0")[0] for offset in range(ResponseMessageOffsets.GROUP_NAMES_START, ResponseMessageOffsets.GROUP_NAMES_START+16*ResponseMessageConstants.SHORT_STRING_LENGTH, ResponseMessageConstants.SHORT_STRING_LENGTH)]
-        group_statuses = [raw_response[offset] for offset in range(ResponseMessageOffsets.GROUP_STATUSES_START, ResponseMessageOffsets.GROUP_STATUSES_START+16)]
-        self.group_ons = [(status & 0x80 > 0) for status in group_statuses]
-        self.group_spills = [(status & 0x40 > 0) for status in group_statuses]
+        zone_statuses = [raw_response[offset] for offset in range(ResponseMessageOffsets.ZONE_STATUSES_START, ResponseMessageOffsets.ZONE_STATUSES_START+16)]
+        self.zone_ons = [(status & 0x80 > 0) for status in zone_statuses]
+        self.zone_spills = [(status & 0x40 > 0) for status in zone_statuses]
         self.turbo_group = raw_response[ResponseMessageOffsets.TURBO_GROUP]
