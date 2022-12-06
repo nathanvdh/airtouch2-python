@@ -23,7 +23,7 @@ class AT2Group:
         # 0 to 10 steps of 10%
         self.damp = response.zone_damps[start_zone]
         self.spill = response.zone_spills[start_zone]
-        self.on = response.zone_ons[self.number]
+        self.on = response.zone_ons[start_zone]
         mismatches: set[str] = set()
         for i in range(start_zone+1, start_zone + num_zones):
             # this group is spilling if any of its zones are
