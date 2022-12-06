@@ -42,15 +42,20 @@ class AT2Group:
         self._client.send_command(ChangeDamper(self.number, inc))
 
     def set_damp(self, new_damp: int):
-        # Set to 0 is equivalent to turning off
         if new_damp < 0 or new_damp > 10:
             raise ValueError("Dampers can only be set from 0 to 10")
-        damp_diff = new_damp - self.damp
-        inc = damp_diff > 0
-        for i in range(abs(damp_diff)):
-            self.inc_dec_damp(inc)
+        # Set to 0 is equivalent to turning off
+        if new_damp == 0:
+            self.turn_off()
+        else:
+            self.turn_on()
+            damp_diff = new_damp - self.damp
+            inc = damp_diff > 0
+            for i in range(abs(damp_diff)):
+                self.inc_dec_damp(inc)
 
     def _turn_on_off(self, on: bool):
+        # there's a race here, should synchronise access to self.on
         if self.on != on:
             self._client.send_command(ToggleGroup(self.number))
 
