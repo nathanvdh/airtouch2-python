@@ -13,7 +13,7 @@ LOGGER = logging.getLogger()
 ip = input('Enter ip address of airtouch2 (e.g. 192.168.1.15): ')
 client  = AT2Client(ip, dump=True)
 
-if not client.start():
+if not client.run():
     LOGGER.warning("Client did not start")
     exit()
 inp = '\0'

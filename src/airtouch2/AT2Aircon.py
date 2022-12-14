@@ -30,8 +30,7 @@ class AT2Aircon:
     #   Gateway IDs 0xFF with 3 speed have no Auto
     # These are based on the app decompiled code
     def _set_supported_fan_speeds(self, num_supported_speeds: int, gateway_id: int):
-        all_speeds: list[ACFanSpeedReference] = list(ACFanSpeedReference._member_map_.values())
-
+        all_speeds:list[ACFanSpeedReference] = list(ACFanSpeedReference.__members__.values())
         if self.brand == ACBrand.FUJITSU and num_supported_speeds == 4:
             self.supported_fan_speeds = all_speeds[:5]
             return
@@ -109,33 +108,33 @@ class AT2Aircon:
 
         self.name = response_message.ac_name[self.number]
 
-    def inc_dec_set_temp(self, inc: bool):
-        self._client.send_command(ChangeSetTemperature(self.number, inc))
+    async def inc_dec_set_temp(self, inc: bool):
+        await self._client.send_command(ChangeSetTemperature(self.number, inc))
 
-    def set_set_temp(self, new_temp: int):
+    async def set_set_temp(self, new_temp: int):
         temp_diff = new_temp - self.set_temp
         inc = temp_diff > 0
         for i in range(abs(temp_diff)):
-            self.inc_dec_set_temp(inc)
+            await self.inc_dec_set_temp(inc)
 
-    def _turn_on_off(self, on: bool):
+    async def _turn_on_off(self, on: bool):
         if self.on != on:
-            self._client.send_command(ToggleAC(self.number))
+            await self._client.send_command(ToggleAC(self.number))
 
-    def turn_off(self):
-        self._turn_on_off(False)
+    async def turn_off(self):
+        await self._turn_on_off(False)
 
-    def turn_on(self):
-        self._turn_on_off(True)
+    async def turn_on(self):
+        await self._turn_on_off(True)
 
-    def set_fan_speed(self, fan_speed: ACFanSpeedReference):
+    async def set_fan_speed(self, fan_speed: ACFanSpeedReference):
         if fan_speed in self.supported_fan_speeds:
-            self._client.send_command(SetFanSpeed(self.number, self._get_speed_val_from_speed(fan_speed)))
+            await self._client.send_command(SetFanSpeed(self.number, self._get_speed_val_from_speed(fan_speed)))
         else:
             _LOGGER.warning(f"Cannot set fan speed to unsupported value {fan_speed}")
 
-    def set_mode(self, mode: ACMode):
-        self._client.send_command(SetMode(self.number, mode))
+    async def set_mode(self, mode: ACMode):
+        await self._client.send_command(SetMode(self.number, mode))
 
     def get_status_strings(self):
         flags = [self.error, self.safety, self.spill, self.turbo]

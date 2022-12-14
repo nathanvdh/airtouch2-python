@@ -20,6 +20,10 @@ classifiers = [
     "Topic :: Software Development :: Embedded Systems"
 ]
 keywords = ["air", "conditioner", "automation"]
+dependencies = [
+    "aiofiles",
+    
+]
 
 [project.urls]
 Homepage = "https://github.com/nathanvdh/airtouch2-python"
