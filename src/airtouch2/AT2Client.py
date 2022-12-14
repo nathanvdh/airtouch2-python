@@ -26,7 +26,7 @@ class AT2Client:
         self._dump: bool = dump
         self._stop: bool = True
         self._read_task: asyncio.Task[None] | None = None
-        self._ready: asyncio.Event = asyncio.Event()
+        self._got_response: asyncio.Event = asyncio.Event()
         self._callbacks: list[Callable] = []
         self.aircons: list[AT2Aircon] = []
         self.groups: list[AT2Group] = []
@@ -56,10 +56,7 @@ class AT2Client:
         self._stop = False
         self._read_task = create_task(self._listen_for_updates())
         await self.send_command(RequestState())
-        await self._ready.wait()
-
-    async def wait_until_ready(self):
-        await self._ready.wait()
+        await asyncio.wait_for(self._got_response.wait(), timeout=5)
 
     async def stop(self) -> None:
         if not self._read_task:
@@ -71,7 +68,7 @@ class AT2Client:
         except asyncio.CancelledError as e:
             # Eat the expected exception
             pass
-        self._ready.clear()
+        self._got_response.clear()
 
     async def send_command(self, command: CommandMessage) -> None:
         if not self._writer:
@@ -79,7 +76,9 @@ class AT2Client:
         else:
             _LOGGER.debug(f"Sending {command.__class__.__name__}")
             self._writer.write(command.serialize())
+            self._got_response.clear()
             await self._writer.drain()
+            await self._got_response.wait()
 
     def add_callback(self, func: Callable):
         self._callbacks.append(func)
@@ -95,17 +94,13 @@ class AT2Client:
             raise RuntimeError(
                 "Client is not connected - call connect() first")
         _LOGGER.debug("Waiting for response")
-        try:
-            resp = await self._reader.read(MessageLength.RESPONSE)
-        except asyncio.CancelledError as e:
-            # task was cancelled
-            raise e
+        resp = await self._reader.read(MessageLength.RESPONSE)
         # TODO: handle socket exceptions?
         _LOGGER.debug("Got response")
         while len(resp) != MessageLength.RESPONSE:
             if not resp:
                 _LOGGER.debug("Connection lost, reconnecting")
-                self._ready.clear()
+                self._got_response.clear()
                 await self._try_reconnect()
             else:
                 _LOGGER.debug(
@@ -156,7 +151,7 @@ class AT2Client:
                         await asyncio.sleep(0)
                         group.update(resp)
                         _LOGGER.debug(group)
-                self._ready.set()
+                self._got_response.set()
                 for func in self._callbacks:
                     await asyncio.sleep(0)
                     func()
