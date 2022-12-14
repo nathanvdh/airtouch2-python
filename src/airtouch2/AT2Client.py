@@ -70,7 +70,7 @@ class AT2Client:
             pass
         self._got_response.clear()
 
-    async def send_command(self, command: CommandMessage) -> None:
+    async def send_command(self, command: CommandMessage, await_response=True) -> None:
         if not self._writer:
             raise RuntimeError("Client is not connected - call run() first")
         else:
@@ -78,7 +78,8 @@ class AT2Client:
             self._writer.write(command.serialize())
             self._got_response.clear()
             await self._writer.drain()
-            await self._got_response.wait()
+            if await_response:
+                await self._got_response.wait()
 
     def add_callback(self, func: Callable):
         self._callbacks.append(func)
@@ -122,7 +123,7 @@ class AT2Client:
                 _LOGGER.debug(
                     "Server is not responding, will continue trying to reconnect every 10s")
         # reconnected
-        await self.send_command(RequestState())
+        await self.send_command(RequestState(), await_response=False)
 
     async def _listen_for_updates(self) -> None:
         while not self._stop:
