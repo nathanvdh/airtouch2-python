@@ -1,6 +1,6 @@
 from __future__ import annotations
 from itertools import compress
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 from airtouch2.protocol.messages import ResponseMessage
 
 from airtouch2.protocol.messages import ChangeDamper, ToggleGroup
@@ -15,6 +15,7 @@ class AT2Group:
     def __init__(self, client: AT2Client, number: int, response: ResponseMessage):
         self._client = client
         self.number = number
+        self._callbacks: list[Callable] = []
         self.update(response)
 
     def update(self, response: ResponseMessage):
@@ -37,6 +38,18 @@ class AT2Group:
                 _LOGGER.warning(f"Zones of group '{self.name}' have mismatching {', '.join(mismatches)}")
 
         self.turbo = True if response.turbo_group == self.number else False
+
+        for func in self._callbacks:
+            func()
+
+    def add_callback(self, func: Callable) -> Callable:
+        self._callbacks.append(func)
+
+        def remove_callback() -> None:
+            if func in self._callbacks:
+                self._callbacks.remove(func)
+
+        return remove_callback
 
     async def inc_dec_damp(self, inc: bool):
         await self._client.send_command(ChangeDamper(self.number, inc))

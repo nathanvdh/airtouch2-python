@@ -27,7 +27,6 @@ class AT2Client:
         self._stop: bool = True
         self._read_task: asyncio.Task[None] | None = None
         self._got_response: asyncio.Event = asyncio.Event()
-        self._callbacks: list[Callable] = []
         self.aircons: list[AT2Aircon] = []
         self.groups: list[AT2Group] = []
         self.system_name: str = "UNKNOWN"
@@ -80,15 +79,6 @@ class AT2Client:
             await self._writer.drain()
             if await_response:
                 await self._got_response.wait()
-
-    def add_callback(self, func: Callable):
-        self._callbacks.append(func)
-
-        def remove_callback() -> None:
-            if func in self._callbacks:
-                self._callbacks.remove(func)
-
-        return remove_callback
 
     async def _read_response(self) -> ResponseMessage:
         if not (self._reader and self._writer):
@@ -153,6 +143,3 @@ class AT2Client:
                         group.update(resp)
                         _LOGGER.debug(group)
                 self._got_response.set()
-                for func in self._callbacks:
-                    await asyncio.sleep(0)
-                    func()

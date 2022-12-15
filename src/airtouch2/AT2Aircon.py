@@ -1,7 +1,7 @@
 from __future__ import annotations
 import logging
 from itertools import compress
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 if TYPE_CHECKING:
     from airtouch2.AT2Client import AT2Client
 from airtouch2.protocol.enums import ACFanSpeedReference, ACBrand, ACMode
@@ -15,6 +15,7 @@ class AT2Aircon:
     def __init__(self, number: int, client: AT2Client, response_message: ResponseMessage):
         self.number: int = number
         self._client: AT2Client = client
+        self._callbacks: list[Callable] = []
         if response_message:
             self.update(response_message)
         else:
@@ -107,6 +108,18 @@ class AT2Aircon:
             _LOGGER.warning(f"AC{self.number} appears disconnected from airtouch")
 
         self.name = response_message.ac_name[self.number]
+
+        for func in self._callbacks:
+            func()
+
+    def add_callback(self, func: Callable) -> Callable:
+        self._callbacks.append(func)
+
+        def remove_callback() -> None:
+            if func in self._callbacks:
+                self._callbacks.remove(func)
+
+        return remove_callback
 
     async def inc_dec_set_temp(self, inc: bool):
         await self._client.send_command(ChangeSetTemperature(self.number, inc))
