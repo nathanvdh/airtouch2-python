@@ -86,7 +86,7 @@ class AT2Client:
                 "Client is not connected - call connect() first")
         _LOGGER.debug("Waiting for response")
         resp = await self._reader.read(MessageLength.RESPONSE)
-        # TODO: handle socket exceptions?
+        # handle socket exceptions?
         _LOGGER.debug("Got response")
         while len(resp) != MessageLength.RESPONSE:
             if not resp:
@@ -112,34 +112,30 @@ class AT2Client:
             if not retries % 50 or retries == 4:
                 _LOGGER.debug(
                     "Server is not responding, will continue trying to reconnect every 10s")
-        # reconnected
         await self.send_command(RequestState(), await_response=False)
 
     async def _listen_for_updates(self) -> None:
         while not self._stop:
-            try:
-                resp = await self._read_response()
-            except asyncio.CancelledError as e:
-                raise e
+            resp = await self._read_response()
+            # ACs
+            if not self.aircons:
+                self.aircons.append(AT2Aircon(0, self, resp))
+                _LOGGER.debug(self.aircons[0])
             else:
-                # ACs
-                if not self.aircons:
-                    self.aircons.append(AT2Aircon(0, self, resp))
-                    _LOGGER.debug(self.aircons[0])
-                else:
-                    for aircon in self.aircons:
-                        aircon.update(resp)
-                        _LOGGER.debug(aircon)
-                # Groups
-                if not self.groups or len(self.groups) != resp.num_groups:
-                    self.groups.clear()
-                    for i in range(resp.num_groups):
-                        await asyncio.sleep(0)
-                        self.groups.append(AT2Group(self, i, resp))
-                        _LOGGER.debug(self.groups[i])
-                else:
-                    for group in self.groups:
-                        await asyncio.sleep(0)
-                        group.update(resp)
-                        _LOGGER.debug(group)
-                self._got_response.set()
+                for aircon in self.aircons:
+                    aircon.update(resp)
+                    _LOGGER.debug(aircon)
+            # Groups
+            if not self.groups or len(self.groups) != resp.num_groups:
+                # this clear will cause problems for anything using the groups
+                self.groups.clear()
+                for i in range(resp.num_groups):
+                    await asyncio.sleep(0)
+                    self.groups.append(AT2Group(self, i, resp))
+                    _LOGGER.debug(self.groups[i])
+            else:
+                for group in self.groups:
+                    await asyncio.sleep(0)
+                    group.update(resp)
+                    _LOGGER.debug(group)
+            self._got_response.set()
