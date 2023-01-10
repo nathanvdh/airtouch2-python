@@ -1,6 +1,6 @@
 from __future__ import annotations
 from itertools import compress
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 from airtouch2.protocol.messages import ResponseMessage
 
 from airtouch2.protocol.messages import ChangeDamper, ToggleGroup
@@ -15,6 +15,7 @@ class AT2Group:
     def __init__(self, client: AT2Client, number: int, response: ResponseMessage):
         self._client = client
         self.number = number
+        self._callbacks: list[Callable] = []
         self.update(response)
 
     def update(self, response: ResponseMessage):
@@ -38,32 +39,43 @@ class AT2Group:
 
         self.turbo = True if response.turbo_group == self.number else False
 
-    def inc_dec_damp(self, inc: bool):
-        self._client.send_command(ChangeDamper(self.number, inc))
+        for func in self._callbacks:
+            func()
 
-    def set_damp(self, new_damp: int):
+    def add_callback(self, func: Callable) -> Callable:
+        self._callbacks.append(func)
+
+        def remove_callback() -> None:
+            if func in self._callbacks:
+                self._callbacks.remove(func)
+
+        return remove_callback
+
+    async def inc_dec_damp(self, inc: bool):
+        await self._client.send_command(ChangeDamper(self.number, inc))
+
+    async def set_damp(self, new_damp: int):
         if new_damp < 0 or new_damp > 10:
             raise ValueError("Dampers can only be set from 0 to 10")
         # Set to 0 is equivalent to turning off
         if new_damp == 0:
-            self.turn_off()
+            await self.turn_off()
         else:
-            self.turn_on()
+            await self.turn_on()
             damp_diff = new_damp - self.damp
             inc = damp_diff > 0
             for i in range(abs(damp_diff)):
-                self.inc_dec_damp(inc)
+                await self.inc_dec_damp(inc)
 
-    def _turn_on_off(self, on: bool):
-        # there's a race here, should synchronise access to self.on
+    async def _turn_on_off(self, on: bool):
         if self.on != on:
-            self._client.send_command(ToggleGroup(self.number))
+            await self._client.send_command(ToggleGroup(self.number))
 
-    def turn_off(self):
-        self._turn_on_off(False)
+    async def turn_off(self):
+        await self._turn_on_off(False)
 
-    def turn_on(self):
-        self._turn_on_off(True)
+    async def turn_on(self):
+        await self._turn_on_off(True)
 
     def get_status_strings(self):
         flags = [self.spill, self.turbo]

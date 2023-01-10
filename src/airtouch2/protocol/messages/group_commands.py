@@ -7,11 +7,11 @@ class GroupCommand(CommandMessage):
         super().__init__()
         self.target_group = target_group_number
 
-    def serialize(self, prefilled_msg: bytearray) -> bytearray:
+    def _serialize(self, prefilled_msg: bytearray) -> bytearray:
         prefilled_msg[1] = CommandMessageType.GROUP_CONTROL
         prefilled_msg[3] = self.target_group
 
-        return super().serialize(prefilled_msg)
+        return super()._serialize(prefilled_msg)
 
 class ToggleGroup(GroupCommand):
     """Command to toggle a group on or off"""
@@ -20,7 +20,7 @@ class ToggleGroup(GroupCommand):
         serial_msg: bytearray = bytearray(self.length)
         serial_msg[4] = CommandMessageConstants.TOGGLE
         serial_msg[5] = GroupCommands.TOGGLE
-        return super().serialize(serial_msg)
+        return super()._serialize(serial_msg)
 
 class ChangeDamper(GroupCommand):
     """Command to toggle a group on or off"""
@@ -32,4 +32,4 @@ class ChangeDamper(GroupCommand):
         serial_msg: bytearray = bytearray(self.length)
         serial_msg[4] = GroupCommands.DAMP_INC if self.inc else GroupCommands.DAMP_DEC
         serial_msg[5] = GroupCommands.CHANGE_DAMP
-        return super().serialize(serial_msg)
+        return super()._serialize(serial_msg)

@@ -7,4 +7,4 @@ class RequestState(CommandMessage):
     def serialize(self) -> bytearray:
         serial_msg: bytearray = bytearray(self.length)
         serial_msg[1] = CommandMessageType.REQUEST_STATE
-        return super().serialize(serial_msg)
+        return super()._serialize(serial_msg)
