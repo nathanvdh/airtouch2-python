@@ -3,10 +3,10 @@ import logging
 from itertools import compress
 from typing import TYPE_CHECKING, Callable
 if TYPE_CHECKING:
-    from airtouch2.AT2Client import AT2Client
-from airtouch2.protocol.enums import ACFanSpeedReference, ACBrand, ACMode
-from airtouch2.protocol.messages import ChangeSetTemperature, ResponseMessage, SetFanSpeed, SetMode, ToggleAC
-from airtouch2.protocol.lookups import GATEWAYID_BRAND_LOOKUP
+    from airtouch2.at2.AT2Client import AT2Client
+from airtouch2.protocol.at2.enums import ACFanSpeedReference, ACBrand, ACMode
+from airtouch2.protocol.at2.messages import ChangeSetTemperature, ResponseMessage, SetFanSpeed, SetMode, ToggleAC
+from airtouch2.protocol.at2.lookups import GATEWAYID_BRAND_LOOKUP
 
 OPEN_ISSUE_TEXT = "please open an issue and detail your system to me:\n\thttps://github.com/nathanvdh/airtouch2-python/issues/new"
 

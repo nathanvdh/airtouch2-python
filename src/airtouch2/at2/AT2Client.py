@@ -5,11 +5,11 @@ import logging
 from socket import gaierror
 from typing import Callable
 
-from airtouch2.protocol.constants import MessageLength
-from airtouch2.protocol.messages import RequestState, ResponseMessage
-from airtouch2.AT2Aircon import AT2Aircon
-from airtouch2.AT2Group import AT2Group
-from airtouch2.protocol.messages.CommandMessage import CommandMessage
+from airtouch2.protocol.at2.constants import MessageLength
+from airtouch2.protocol.at2.messages import RequestState, ResponseMessage
+from airtouch2.at2.AT2Aircon import AT2Aircon
+from airtouch2.at2.AT2Group import AT2Group
+from airtouch2.protocol.at2.messages.CommandMessage import CommandMessage
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -18,9 +18,9 @@ NetworkOrHostDownErrors = (errno.EHOSTUNREACH, errno.ECONNREFUSED,  errno.ETIMED
 
 
 class AT2Client:
-    def __init__(self, host: str, dump: bool = False) -> None:
+    def __init__(self, host: str, port: int = 8899, dump: bool = False) -> None:
         self._host_ip: str = host
-        self._host_port: int = 8899
+        self._host_port: int = port
         self._reader: asyncio.StreamReader | None = None
         self._writer: asyncio.StreamWriter | None = None
         self._dump: bool = dump
@@ -115,7 +115,7 @@ class AT2Client:
         await self.send_command(RequestState(), await_response=False)
 
     async def _listen_for_updates(self) -> None:
-        while not self._stop:
+        while not self._1:
             resp = await self._read_response()
             # ACs
             if not self.aircons:

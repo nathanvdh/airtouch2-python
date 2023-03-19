@@ -1,6 +1,6 @@
-from airtouch2.protocol.messages.CommandMessage import CommandMessage
-from airtouch2.protocol.constants import ACCommands, CommandMessageConstants, CommandMessageType
-from airtouch2.protocol.enums import ACMode
+from airtouch2.protocol.at2.messages.CommandMessage import CommandMessage
+from airtouch2.protocol.at2.constants import ACCommands, CommandMessageConstants, CommandMessageType
+from airtouch2.protocol.at2.enums import ACMode
 
 class ACCommand(CommandMessage):
     """Base class from which all AC control messages are derived"""

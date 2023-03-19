@@ -1,5 +1,5 @@
 from abc import ABC
-from airtouch2.protocol.constants import MessageLength
+from airtouch2.protocol.at2.constants import MessageLength
 
 class Message(ABC):
     """ Message base class from which all airtouch 2 communications messages are derived"""

@@ -1,5 +1,5 @@
-from airtouch2.protocol.constants import CommandMessageConstants, CommandMessageType, GroupCommands
-from airtouch2.protocol.messages.CommandMessage import CommandMessage
+from airtouch2.protocol.at2.constants import CommandMessageConstants, CommandMessageType, GroupCommands
+from airtouch2.protocol.at2.messages.CommandMessage import CommandMessage
 
 class GroupCommand(CommandMessage):
     """Base class from which all group control messages are derived"""

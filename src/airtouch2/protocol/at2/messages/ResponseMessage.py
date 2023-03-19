@@ -1,6 +1,6 @@
-from airtouch2.protocol.messages.Message import Message
-from airtouch2.protocol.constants import MessageLength, ResponseMessageConstants, ResponseMessageOffsets
-from airtouch2.protocol.enums import ACBrand, ACMode
+from airtouch2.protocol.at2.messages.Message import Message
+from airtouch2.protocol.at2.constants import MessageLength, ResponseMessageConstants, ResponseMessageOffsets
+from airtouch2.protocol.at2.enums import ACBrand, ACMode
 
 class ResponseMessage(Message):
     """ The airtouch 2 response message (there is only one) that contains all the information about the current state of the system"""

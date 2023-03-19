@@ -1,11 +1,11 @@
 from __future__ import annotations
 from itertools import compress
 from typing import TYPE_CHECKING, Callable
-from airtouch2.protocol.messages import ResponseMessage
+from airtouch2.protocol.at2.messages import ResponseMessage
 
-from airtouch2.protocol.messages import ChangeDamper, ToggleGroup
+from airtouch2.protocol.at2.messages import ChangeDamper, ToggleGroup
 if TYPE_CHECKING:
-    from airtouch2.AT2Client import AT2Client
+    from airtouch2.at2.AT2Client import AT2Client
 import logging
 
 

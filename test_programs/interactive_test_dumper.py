@@ -1,5 +1,5 @@
 from airtouch2 import AT2Client
-from airtouch2.protocol.messages.ac_commands import ToggleAC
+from airtouch2.protocol.at2.messages.ac_commands import ToggleAC
 import logging
 import asyncio
 import aioconsole

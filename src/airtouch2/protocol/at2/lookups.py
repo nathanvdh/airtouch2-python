@@ -1,4 +1,4 @@
-from airtouch2.protocol.enums import ACBrand
+from airtouch2.protocol.at2.enums import ACBrand
 
 # I cannot find documentation of what these values actually mean
 # The app prioritises this 'brand' (based on gateway id) over the other one in the message
