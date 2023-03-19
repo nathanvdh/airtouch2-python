@@ -22,7 +22,7 @@ class ControlStatusOffsets(IntEnum):
     NORMAL_DATA_LENGTH = 2
     # bytes 5-6 are number of repeated 'repeat data's
     REPEAT_DATA_COUNT = 4
-    # bytes 7-8 are 'repeat data' length
+    # bytes 7-8 are each 'repeat data' length
     REPEAT_DATA_LENGTH = 6
     SUBDATA = 8
 
