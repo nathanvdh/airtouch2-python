@@ -9,7 +9,7 @@ _LOGGER = logging.getLogger()
 _LOGGER.addHandler(logging.StreamHandler())
 logging.getLogger('asyncio').setLevel(logging.WARNING)
 
-class AcStatusPrinter:
+class AcStatusLogger:
     client: At2PlusClient
     acs: list[At2PlusAircon]
     cleanup_callbacks: list[Callable]
@@ -20,9 +20,9 @@ class AcStatusPrinter:
         for ac in self.client.aircons_by_id.values():
             if ac not in self.acs:
                 self.acs.append(ac)
-                print(ac.status)
-                print(ac.ability)
-                self.cleanup_callbacks.append(ac.add_callback(lambda : print(ac.status)))
+                _LOGGER.info(ac.status)
+                _LOGGER.info(ac.ability)
+                self.cleanup_callbacks.append(ac.add_callback(lambda : _LOGGER.info(ac.status)))
 
     def cleanup(self):
         while len(self.cleanup_callbacks) > 0:
@@ -33,12 +33,12 @@ async def main():
     client = At2PlusClient(addr, dump=True)
     if not await client.connect():
         raise RuntimeError(f"Could not connect to {client._host_ip}:{client._host_port}")
-    printer = AcStatusPrinter(client)
+    status_logger = AcStatusLogger(client)
     await client.run()
     inp = await aioconsole.ainput("Enter 'q' to quit: ")
     while inp != "q":
         inp = await aioconsole.ainput("Enter 'q' to quit: ")
     await client.stop()
-    printer.cleanup()
+    status_logger.cleanup()
 
 asyncio.run(main())
