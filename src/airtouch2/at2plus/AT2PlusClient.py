@@ -27,7 +27,7 @@ NetworkOrHostDownErrors = (errno.EHOSTUNREACH, errno.ECONNREFUSED,  errno.ETIMED
 class At2PlusClient:
 
     def __init__(self, host: str, port: int = 9200, dump: bool = False):
-        self.aircons_by_id: dict[int, At2PlusAircon]
+        self.aircons_by_id: dict[int, At2PlusAircon] = {}
         self._host_ip: str = host
         self._host_port: int = port
         self._reader: asyncio.StreamReader | None = None
@@ -54,13 +54,13 @@ class At2PlusClient:
             return False
         else:
             return True
-        
+
     async def run(self, create_task: Callable = asyncio.create_task) -> None:
         """Starts the processing of incoming information from the server, using the provided create_task function"""
         _LOGGER.debug("Starting listener task")
         self._main_loop = create_task(self._main())
         await self.send(AcStatusMessage([])) # request status
-    
+
     async def stop(self) -> None:
         if not self._main_loop:
             raise RuntimeError("Client task is not running")
@@ -76,15 +76,22 @@ class At2PlusClient:
         if not self._writer:
             raise RuntimeError("Client is not connected - call run() first")
         else:
-            _LOGGER.debug(f"Sending {message.__class__.__name__}")
-            self._writer.write(message.to_bytes())
+            bytes_to_write = message.to_bytes()
+            _LOGGER.debug(f">> Sending {message.__class__.__name__} with data %s", bytes_to_write.hex(":"))
+            self._writer.write(bytes_to_write)
             await self._writer.drain()
 
     async def _request_ac_ability(self, number: int) -> AcAbility | None:
+        _LOGGER.debug(">> Requesting ability of AC %i", number)
         await self.send(RequestAcAbilityMessage(number))
+        _LOGGER.debug("Waiting for ability message response...")
+        test = await self._read_bytes(38)
+        _LOGGER.debug("Got %s", test.hex(":"))
         ac_ability = await self._ability_message_queue.get()
+        _LOGGER.debug("Got ability message response")
         if len(ac_ability.abilities) != 1:
-            _LOGGER.warning(f"Expected ability of single requested AC but got {len(ac_ability.abilities)}")
+            _LOGGER.warning(
+                f"Expected ability of single requested AC but got {len(ac_ability.abilities)}")
             return None
         if ac_ability.abilities[0].number != number:
             _LOGGER.warning(f"Requested ability of AC{number} but got AC{ac_ability.abilities[0].number}")
@@ -92,14 +99,16 @@ class At2PlusClient:
         return ac_ability.abilities[0]
 
     async def _handle_status_message(self, message: AcStatusMessage):
-            for status in message.statuses:
-                if status.id in self.aircons_by_id.keys():
-                    self.aircons_by_id[status.id].update_status(status)
-                else:
+        for status in message.statuses:
+            if status.id in self.aircons_by_id.keys():
+                self.aircons_by_id[status.id].update_status(status)
+                _LOGGER.debug("Updated AC %i with value ", status.id, status)
+            else:
+                _LOGGER.debug("AC %i not found, requesting ability...", status.id)
+                ability = await self._request_ac_ability(status.id)
+                while not ability:
                     ability = await self._request_ac_ability(status.id)
-                    while not ability:
-                        ability = await self._request_ac_ability(status.id)
-                    self.aircons_by_id[status.id] = At2PlusAircon(ability, status)
+                self.aircons_by_id[status.id] = At2PlusAircon(ability, status)
 
     async def _try_reconnect(self) -> None:
         retries = 0
@@ -112,19 +121,21 @@ class At2PlusClient:
         await self.send(AcStatusMessage([]))
 
     async def _read_bytes(self, size: int) -> bytes | None:
-            if not self._reader:
-                raise RuntimeError("Need reader")
-            try:
-                data = await self._reader.readexactly(size)
-            except asyncio.IncompleteReadError as e:
-                _LOGGER.debug(f"IncompleteReadError - partial bytes: {e.partial.hex(':')}")
-                data = None
-            if not data:
-                _LOGGER.warning("Connection lost, reconnecting")
-                await self._try_reconnect()
-                return None
-            return data
-    
+        if not self._reader:
+            raise RuntimeError("Need reader")
+        try:
+            data = await self._reader.readexactly(size)
+        except asyncio.IncompleteReadError as e:
+            _LOGGER.debug(
+                f"IncompleteReadError - partial bytes: {e.partial.hex(':')}")
+            data = None
+        if not data:
+            _LOGGER.warning("Connection lost, reconnecting")
+            await self._try_reconnect()
+            return None
+        _LOGGER.debug("<< Reading payload of size %i: %s",size, data.hex(":"))
+        return data
+
     async def _read_header(self) -> Header:
         header_bytes = await self._read_bytes(HEADER_LENGTH)
         while not header_bytes:
@@ -139,8 +150,10 @@ class At2PlusClient:
 
     async def _read_message(self) -> Message | None:
         header = await self._read_header()
+        header_minus_start_bytes = header.to_bytes()[2:]
         buffer = Buffer(header.data_length)
         data_bytes = await self._read_bytes(header.data_length)
+
         if not data_bytes:
             # interrupted during data reading
             return None
@@ -149,15 +162,16 @@ class At2PlusClient:
         if not checksum:
             # interrupted during checksum reading
             return None
-        calculated_checksum = crc16(buffer.data)
+        calculated_checksum = crc16(header_minus_start_bytes + buffer.data)
         if (checksum != calculated_checksum):
-            _LOGGER.warning(f"Checksum mismatch, ignoring message")
+            _LOGGER.warning(
+                f"Checksum mismatch, ignoring message: Got {checksum.hex(':')} but expected {calculated_checksum.hex(':')}")
             return None
         if self._dump:
             # blocks but is only used for dev and debugging
             with open('message_' + datetime.now().strftime("%m-%d-%Y_%H-%M-%S") + '.dump', 'wb') as f:
                 f.write(header.to_bytes() + buffer.to_bytes() + checksum)
-        
+
         return Message(header, buffer.finalise())
 
     async def _main(self) -> None:
@@ -172,19 +186,23 @@ class At2PlusClient:
                 continue
 
             if message.header.type == MessageType.CONTROL_STATUS:
-                subheader = ControlStatusSubHeader.from_buffer(message.data_buffer)
+                subheader = ControlStatusSubHeader.from_buffer(
+                    message.data_buffer)
                 if subheader.sub_type == ControlStatusSubType.AC_STATUS:
-                    status_message = AcStatusMessage.from_bytes(message.data_buffer.read_bytes(subheader.subdata_length.total()))
+                    status_message = AcStatusMessage.from_bytes(
+                        message.data_buffer.read_bytes(subheader.subdata_length.total()))
                     await self._handle_status_message(status_message)
                 else:
-                    _LOGGER.warning(f"Unhandled message type: {subheader.sub_type}")
+                    _LOGGER.warning(
+                        f"Unhandled message type: {subheader.sub_type}")
 
             elif message.header.type == MessageType.EXTENDED:
                 subheader = ExtendedSubHeader.from_buffer(message.data_buffer)
                 if subheader.sub_type == ExtendedMessageSubType.ABILITY:
                     await self._ability_message_queue.put(AcAbilityMessage.from_bytes(message.data_buffer.read_remaining()))
                 else:
-                    _LOGGER.warning(f"Unhandled message type: {subheader.sub_type}")
+                    _LOGGER.warning(
+                        f"Unhandled message type: {subheader.sub_type}")
 
     def add_new_ac_callback(self, callback: Callable):
         self._new_ac_callbacks.append(callback)
