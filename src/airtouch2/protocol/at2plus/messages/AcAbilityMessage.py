@@ -99,9 +99,9 @@ class RequestAcAbilityMessage(Serializable):
 
     def to_bytes(self) -> bytes:
         buffer = prime_message_buffer(Header(
-            Address.EXTENDED, MessageType.EXTENDED, SUBHEADER_LENGTH + (1 if self.ac_number else 0)))
+            Address.EXTENDED, MessageType.EXTENDED, SUBHEADER_LENGTH + (1 if self.ac_number is not None else 0)))
         buffer.append(ExtendedSubHeader(ExtendedMessageSubType.ABILITY))
-        if self.ac_number:
+        if self.ac_number is not None:
             buffer.append_bytes(bytes([self.ac_number]))
         add_checksum_message_buffer(buffer)
         return buffer.to_bytes()

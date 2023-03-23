@@ -69,10 +69,10 @@ class Header(Serializable):
         address = Address(header_bytes[CommonMessageOffsets.ADDRESS+1])
         if type == MessageType.CONTROL_STATUS:
             if (address != Address.NORMAL):
-                raise ValueError("Message address value is invalid")
+                raise ValueError(f"Message address value is invalid: {header_bytes.hex(':')}")
         elif type == MessageType.EXTENDED:
             if (address != Address.EXTENDED):
-                raise ValueError("Message address value is invalid")
+                raise ValueError(f"Message address value is invalid: {header_bytes.hex(':')}")
         else:
             raise ValueError("Message type is invalid")
         id = header_bytes[CommonMessageOffsets.MESAGE_ID]

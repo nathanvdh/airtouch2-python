@@ -1,0 +1,8 @@
+{
+"python.analysis.typeCheckingMode": "basic",
+"autopep8.args": [
+    "--max-line-length",
+    "120",
+    "--experimental"
+]
+}

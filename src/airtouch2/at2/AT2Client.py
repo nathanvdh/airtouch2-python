@@ -115,7 +115,7 @@ class AT2Client:
         await self.send_command(RequestState(), await_response=False)
 
     async def _listen_for_updates(self) -> None:
-        while not self._1:
+        while not self._stop:
             resp = await self._read_response()
             # ACs
             if not self.aircons:
