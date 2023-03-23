@@ -4,6 +4,7 @@ from airtouch2.at2plus.AT2PlusClient import At2PlusClient
 import logging
 import asyncio
 import aioconsole
+
 logging.basicConfig(filename='airtouch2plus.log',filemode='a', level=logging.DEBUG, format='%(asctime)s %(threadName)s %(levelname)s: %(message)s')
 _LOGGER = logging.getLogger()
 _LOGGER.addHandler(logging.StreamHandler())
@@ -31,15 +32,16 @@ class AcStatusLogger:
             self.cleanup_callbacks.pop()()
 
 async def main():
-    addr = await aioconsole.ainput("Enter airtouch2plus IP address: ")
+    # addr = await aioconsole.ainput("Enter airtouch2plus IP address: ")
+    addr = "192.168.20.9"
     client = At2PlusClient(addr, dump=True)
     if not await client.connect():
         raise RuntimeError(f"Could not connect to {client._host_ip}:{client._host_port}")
     status_logger = AcStatusLogger(client)
     await client.run()
-    inp = await aioconsole.ainput("Enter 'q' to quit: ")
+    inp = await aioconsole.ainput("Enter 'q' to quit: \n")
     while inp != "q":
-        inp = await aioconsole.ainput("Enter 'q' to quit: ")
+        inp = await aioconsole.ainput("Enter 'q' to quit: \n")
     await client.stop()
     status_logger.cleanup()
 

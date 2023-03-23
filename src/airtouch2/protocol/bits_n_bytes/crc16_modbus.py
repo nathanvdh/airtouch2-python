@@ -38,4 +38,5 @@ def crc16(data: bytes) -> bytes:
     crc = 0xFFFF
     for byte in data:
         crc = (crc >> 8) ^ table[byte ^ (crc & 0xFF)]
-    return crc.to_bytes(2, byteorder='big')
+    final = crc.to_bytes(2, byteorder='big')
+    return final
