@@ -57,10 +57,6 @@ class Header(Serializable):
 
     @staticmethod
     def from_bytes(header_bytes: bytes) -> Header:
-        # convert to hex
-        bytes_hex = [hex(b) for b in header_bytes]
-        # print(">>", [hex(b) for b in header_bytes])
-
         if len(header_bytes) != HEADER_LENGTH:
             raise ValueError("Unexpected header size")
         for b in header_bytes[CommonMessageOffsets.HEADER:CommonMessageOffsets.ADDRESS]:
@@ -73,10 +69,10 @@ class Header(Serializable):
         address = Address(header_bytes[CommonMessageOffsets.ADDRESS+1])
         if type == MessageType.CONTROL_STATUS:
             if (address != Address.NORMAL):
-                raise ValueError("Message address value is invalid: ", bytes_hex)
+                raise ValueError("Message address value is invalid: ", header_bytes.hex(":"))
         elif type == MessageType.EXTENDED:
             if (address != Address.EXTENDED):
-                raise ValueError("Message address value is invalid: ", bytes_hex)
+                raise ValueError("Message address value is invalid: ", header_bytes.hex(":"))
         else:
             raise ValueError("Message type is invalid")
         id = header_bytes[CommonMessageOffsets.MESAGE_ID]

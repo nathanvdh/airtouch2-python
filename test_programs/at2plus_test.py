@@ -32,8 +32,7 @@ class AcStatusLogger:
             self.cleanup_callbacks.pop()()
 
 async def main():
-    # addr = await aioconsole.ainput("Enter airtouch2plus IP address: ")
-    addr = "192.168.20.9"
+    addr = await aioconsole.ainput("Enter airtouch2plus IP address: ")
     client = At2PlusClient(addr, dump=True)
     if not await client.connect():
         raise RuntimeError(f"Could not connect to {client._host_ip}:{client._host_port}")
