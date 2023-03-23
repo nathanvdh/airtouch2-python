@@ -172,8 +172,7 @@ class At2PlusClient:
             with open('message_' + datetime.now().strftime("%m-%d-%Y_%H-%M-%S") + '.dump', 'wb') as f:
                 f.write(header.to_bytes() + buffer.to_bytes() + checksum)
 
-        message = Message(header, buffer.finalise())
-        return message
+        return Message(header, buffer.finalise())
 
     async def _main(self) -> None:
         while not self._stop:
