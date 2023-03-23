@@ -10,7 +10,7 @@ from airtouch2.protocol.interfaces import Serializable
 MESSAGE_ID = 1
 HEADER_MAGIC = 0x55
 HEADER_LENGTH = 8
-ADDRESS_SEND_BYTE = 0xB0
+ADDRESS_CONSTANT = 0xB0
 NON_DATA_LENGTH = 10
 
 
@@ -63,9 +63,10 @@ class Header(Serializable):
             if (b != HEADER_MAGIC):
                 raise ValueError("Message header magic is invalid")
         type = MessageType(header_bytes[CommonMessageOffsets.MESSAGE_TYPE])
-        address = Address(header_bytes[CommonMessageOffsets.ADDRESS])
-        if address != header_bytes[CommonMessageOffsets.ADDRESS+1]:
-            raise ValueError("Address bytes do not match")
+        if header_bytes[CommonMessageOffsets.ADDRESS] != ADDRESS_CONSTANT:
+            raise ValueError(
+                f"Unexpected address byte: expected {hex(ADDRESS_CONSTANT)}, got {hex(header_bytes[CommonMessageOffsets.ADDRESS])}")
+        address = Address(header_bytes[CommonMessageOffsets.ADDRESS+1])
         if type == MessageType.CONTROL_STATUS:
             if (address != Address.NORMAL):
                 raise ValueError("Message address value is invalid")
@@ -81,7 +82,7 @@ class Header(Serializable):
 
     def to_bytes(self) -> bytes:
         return bytes([HEADER_MAGIC, HEADER_MAGIC]) + \
-            bytes([self.address, self.address if self._received else ADDRESS_SEND_BYTE]) + \
+            (bytes([ADDRESS_CONSTANT, self.address]) if self._received else bytes([self.address, ADDRESS_CONSTANT])) + \
             bytes([MESSAGE_ID, self.type]) + \
             self.data_length.to_bytes(2, 'big')
 

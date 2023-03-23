@@ -35,8 +35,8 @@ class At2PlusClient:
         self._dump: bool = dump
         self._main_loop: asyncio.Task[None] | None = None
         self._stop: bool = False
-        self._ability_message_queue: asyncio.Queue[AcAbilityMessage]
-        self._new_ac_callbacks: list[Callable]
+        self._ability_message_queue: asyncio.Queue[AcAbilityMessage] = asyncio.Queue()
+        self._new_ac_callbacks: list[Callable] = []
 
     async def connect(self) -> bool:
         """Opens connection to the server, returns True/False if successful/unsuccessful"""
@@ -131,7 +131,8 @@ class At2PlusClient:
             header_bytes = await self._read_bytes(HEADER_LENGTH)
         try:
             header = Header.from_bytes(header_bytes)
-        except ValueError:
+        except ValueError as e:
+            _LOGGER.debug(f"ValueError: {e}")
             _LOGGER.debug("Failed reading header, trying again")
             header = await self._read_header()
         return header
