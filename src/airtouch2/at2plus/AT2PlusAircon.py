@@ -20,7 +20,7 @@ class At2PlusAircon:
     ability: AcAbility | None
     _ready: Event
 
-    _callbacks: list[Callable]
+    _callbacks: list[Callable] = []
 
     def __init__(self, status: AcStatus, client: At2PlusClient):
         self.status = status

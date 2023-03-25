@@ -22,6 +22,7 @@ class AcStatusLogger:
     cleanup_callbacks: list[Callable]
 
     def __init__(self, client: At2PlusClient):
+        self.client = client
         self.cleanup_callbacks = []
         self.acs = []
         self.cleanup_callbacks.append(client.add_new_ac_callback(self.new_ac))
