@@ -67,7 +67,7 @@ class At2PlusAircon:
     def _update_status(self, status: AcStatus):
         self.status = status
         for callback in self._callbacks:
-            self._client._task_creator(callback)
+            callback()
 
     def _set_ability(self, ability: AcAbility):
         if (self.ability is not None):

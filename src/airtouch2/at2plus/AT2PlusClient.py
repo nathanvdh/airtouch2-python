@@ -106,7 +106,7 @@ class At2PlusClient:
                 _LOGGER.debug(f"New AC ({status.id}) found")
                 self.aircons_by_id[status.id] = At2PlusAircon(status, self)
                 for callback in self._new_ac_callbacks:
-                    self._task_creator(callback)
+                    callback()
                 ability = await self._request_ac_ability(status.id)
                 while not ability:
                     ability = await self._request_ac_ability(status.id)
