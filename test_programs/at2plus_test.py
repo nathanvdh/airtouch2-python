@@ -11,6 +11,10 @@ _LOGGER = logging.getLogger()
 _LOGGER.addHandler(logging.StreamHandler())
 logging.getLogger('asyncio').setLevel(logging.WARNING)
 
+def log_ac_info(ac: At2PlusAircon):
+    _LOGGER.info(ac.status)
+    if (ac.ability is not None):
+        _LOGGER.info(ac.ability)
 
 class AcStatusLogger:
     client: At2PlusClient
@@ -27,8 +31,7 @@ class AcStatusLogger:
             if ac not in self.acs:
                 self.acs.append(ac)
                 _LOGGER.info(ac.status)
-                _LOGGER.info(ac.ability)
-                self.cleanup_callbacks.append(ac.add_callback(lambda: _LOGGER.info(ac.status)))
+                self.cleanup_callbacks.append(ac.add_callback(log_ac_info))
 
     def cleanup(self):
         while len(self.cleanup_callbacks) > 0:
