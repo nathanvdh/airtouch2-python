@@ -38,6 +38,11 @@ class AcStatusLogger:
         while len(self.cleanup_callbacks) > 0:
             self.cleanup_callbacks.pop()()
 
+input_str: str = \
+"""
+Enter: 'q' to quit
+       'r' to request AC0 ability
+"""
 
 async def main():
     addr = await aioconsole.ainput("Enter airtouch2plus IP address: ")
@@ -46,9 +51,14 @@ async def main():
         raise RuntimeError(f"Could not connect to {client._host_ip}:{client._host_port}")
     status_logger = AcStatusLogger(client)
     await client.run()
-    inp = await aioconsole.ainput("Enter 'q' to quit: \n")
+    inp = await aioconsole.ainput(input_str)
     while inp != "q":
-        inp = await aioconsole.ainput("Enter 'q' to quit: \n")
+        if (inp == "r"):
+            ability = await client._request_ac_ability(0)
+            while not ability:
+                ability = await client._request_ac_ability(0)
+            client.aircons_by_id[0]._set_ability(ability)
+        inp = await aioconsole.ainput(input_str)
     await client.stop()
     status_logger.cleanup()
 
