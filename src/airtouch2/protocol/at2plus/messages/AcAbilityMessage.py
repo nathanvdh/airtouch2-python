@@ -24,7 +24,7 @@ class AcAbility(Serializable):
     @staticmethod
     def from_bytes(data: bytes) -> AcAbility:
         if len(data) != AC_ABILITY_LENGTH:
-            raise ValueError(f"Data must be {AC_ABILITY_LENGTH} bytes")
+            raise ValueError(f"Data must be {AC_ABILITY_LENGTH} bytes but received {len(data)} bytes")
         number = data[0]
         # length = data[1]
         name = data[2:18].decode('ascii').split("\x00")[0]
@@ -79,7 +79,16 @@ class AcAbilityMessage(Serializable):
 
     @staticmethod
     def from_bytes(subdata: bytes) -> AcAbilityMessage:
-        return AcAbilityMessage([AcAbility.from_bytes(subdata[i:i+AC_ABILITY_LENGTH]) for i in range(0, len(subdata), AC_ABILITY_LENGTH)])
+        ac_ability_list = []
+
+        # Iterate over subdata in steps of AC_ABILITY_LENGTH
+        for i in range(0, len(subdata), AC_ABILITY_LENGTH):
+            subdata_slice = subdata[i:i+AC_ABILITY_LENGTH]
+            ac_ability = AcAbility.from_bytes(subdata_slice)
+            ac_ability_list.append(ac_ability)
+            break #! Ignores the other ACs in the list for now
+        ac_ability_message = AcAbilityMessage(ac_ability_list)
+        return ac_ability_message
 
     def to_bytes(self) -> bytes:
         buffer = prime_message_buffer(Header(

@@ -176,32 +176,35 @@ class At2PlusClient:
 
     async def _main(self) -> None:
         while not self._stop:
-            if not (self._reader and self._writer):
-                raise RuntimeError("Client is not connected - call connect() first")
-            message = await self._read_message()
-            if not message:
-                # something went wrong
-                _LOGGER.warning("Reading message failed")
-                continue
+            try:
+                if not (self._reader and self._writer):
+                    raise RuntimeError("Client is not connected - call connect() first")
+                message = await self._read_message()
+                if not message:
+                    # something went wrong
+                    _LOGGER.warning("Reading message failed")
+                    continue
 
-            if message.header.type == MessageType.CONTROL_STATUS:
-                subheader = ControlStatusSubHeader.from_buffer(message.data_buffer)
-                if subheader.sub_type == ControlStatusSubType.AC_STATUS:
-                    status_message = AcStatusMessage.from_bytes(
-                        message.data_buffer.read_bytes(subheader.subdata_length.total()))
-                    self._task_creator(self._handle_status_message(status_message))
-                else:
-                    _LOGGER.warning(
-                        f"Unhandled message type: {subheader.sub_type}")
-            elif message.header.type == MessageType.EXTENDED:
-                _LOGGER.debug("Main loop received extended message")
-                subheader = ExtendedSubHeader.from_buffer(message.data_buffer)
-                if subheader.sub_type == ExtendedMessageSubType.ABILITY:
-                    _LOGGER.debug("Putting ability message onto queue for requester")
-                    await self._ability_message_queue.put(AcAbilityMessage.from_bytes(message.data_buffer.read_remaining()))
-                else:
-                    _LOGGER.warning(
-                        f"Unhandled message type: {subheader.sub_type}")
+                if message.header.type == MessageType.CONTROL_STATUS:
+                    subheader = ControlStatusSubHeader.from_buffer(message.data_buffer)
+                    if subheader.sub_type == ControlStatusSubType.AC_STATUS:
+                        status_message = AcStatusMessage.from_bytes(
+                            message.data_buffer.read_bytes(subheader.subdata_length.total()))
+                        self._task_creator(self._handle_status_message(status_message))
+                    else:
+                        _LOGGER.warning(f"Unhandled message type: {subheader.sub_type}")
+                elif message.header.type == MessageType.EXTENDED:
+                    subheader = ExtendedSubHeader.from_buffer(message.data_buffer)
+                    if subheader.sub_type == ExtendedMessageSubType.ABILITY:
+                        ability_message_bytes = message.data_buffer.read_remaining()
+                        _LOGGER.debug(f"Creating ability message from {len(ability_message_bytes)} bytes")
+                        ability = AcAbilityMessage.from_bytes(ability_message_bytes)
+                        await self._ability_message_queue.put(ability)
+                    else:
+                        _LOGGER.warning(f"Unhandled message type: {subheader.sub_type}")
+            except Exception as e:
+                _LOGGER.error(f"Error in main loop: {e}")
+                
 
     def add_new_ac_callback(self, callback: Callable):
         self._new_ac_callbacks.append(callback)
