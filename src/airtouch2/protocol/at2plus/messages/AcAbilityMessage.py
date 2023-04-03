@@ -2,10 +2,9 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from enum import IntEnum
-from airtouch2.protocol.at2plus.enums import AcFanSpeed, AcMode
+from airtouch2.protocol.at2plus.enums import AcFanSpeed, AcSetMode
 from airtouch2.protocol.at2plus.extended_common import EXTENDED_SUBHEADER_LENGTH, ExtendedMessageSubType, ExtendedSubHeader
 from airtouch2.protocol.at2plus.message_common import Address, Header, MessageType, add_checksum_message_buffer, prime_message_buffer
-from airtouch2.protocol.bits_n_bytes.buffer import Buffer
 from airtouch2.protocol.interfaces import Serializable
 
 
@@ -40,11 +39,11 @@ class DualSetpointLimits:
 
 @dataclass
 class AcAbility(Serializable):
-    ac_number: int
+    ac_id: int
     name: str
     start_group: int
     group_count: int
-    supported_modes: list[AcMode]
+    supported_modes: list[AcSetMode]
     supported_fan_speeds: list[AcFanSpeed]
     setpoint_limits: SetpointLimits | DualSetpointLimits
 
@@ -53,7 +52,7 @@ class AcAbility(Serializable):
         if len(data) != AcAbilitySubDataLength.V1 and len(data) != AcAbilitySubDataLength.V1_1:
             raise ValueError(
                 f"Invalid AcAbility length, should be {AcAbilitySubDataLength.V1} or {AcAbilitySubDataLength.V1_1}, got: {len(data)}")
-        ac_number = data[0]
+        ac_id = data[0]
         following_data_length = data[1]
         if following_data_length != len(data) - 2:
             raise ValueError(
@@ -66,7 +65,7 @@ class AcAbility(Serializable):
         for i in range(5):
             # this loop exploits the fact that the support bits are in the same order as the enum values
             if (data[20] & (1 << i)) > 0:
-                supported_modes.append(AcMode.from_int(i))
+                supported_modes.append(AcSetMode.from_int(i))
         supported_fan_speeds = []
         for i in range(7):
             # ditto
@@ -78,10 +77,10 @@ class AcAbility(Serializable):
             set_point_limits = DualSetpointLimits(set_point_limits, SetpointLimits(data[24], data[25]))
 
         return AcAbility(
-            ac_number, name, start_group, group_count, supported_modes, supported_fan_speeds, set_point_limits)
+            ac_id, name, start_group, group_count, supported_modes, supported_fan_speeds, set_point_limits)
 
     def to_bytes(self) -> bytes:
-        data = bytes([self.ac_number, (AcAbilitySubDataLength.V1_1 - 2) if isinstance(self.setpoint_limits, DualSetpointLimits) else (
+        data = bytes([self.ac_id, (AcAbilitySubDataLength.V1_1 - 2) if isinstance(self.setpoint_limits, DualSetpointLimits) else (
             AcAbilitySubDataLength.V1 - 2)]) + self.name.encode("ascii") + bytes(16-len(self.name)) + bytes([self.start_group, self.group_count])
         supported_modes_val: int = 0
         for mode in self.supported_modes:
@@ -100,7 +99,7 @@ class AcAbility(Serializable):
 
     def __repr__(self) -> str:
         return f"""
-        number: {self.ac_number}
+        number: {self.ac_id}
         name: {self.name}
         start_group: {self.start_group}
         group_count: {self.group_count}

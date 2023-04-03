@@ -81,19 +81,19 @@ class At2PlusClient:
             self._writer.write(bytes_to_write)
             await self._writer.drain()
 
-    async def _request_ac_ability(self, number: int) -> AcAbility | None:
-        _LOGGER.debug(f"Requesting ability of AC{number}")
-        await self.send(RequestAcAbilityMessage(number))
+    async def _request_ac_ability(self, id: int) -> AcAbility | None:
+        _LOGGER.debug(f"Requesting ability of AC{id}")
+        await self.send(RequestAcAbilityMessage(id))
         _LOGGER.debug("Waiting for ability message response...")
         ac_ability = await self._ability_message_queue.get()
         _LOGGER.debug("Got ability message response")
         if len(ac_ability.abilities) != 1:
             _LOGGER.warning(f"Expected ability of single requested AC but got {len(ac_ability.abilities)}")
             return None
-        if ac_ability.abilities[0].number != number:
-            _LOGGER.warning(f"Requested ability of AC{number} but got AC{ac_ability.abilities[0].number}")
+        if ac_ability.abilities[0].ac_id != id:
+            _LOGGER.warning(f"Requested ability of AC{id} but got AC{ac_ability.abilities[0].ac_id}")
             return None
-        _LOGGER.debug(f"Got ability of AC{number}: {ac_ability.abilities[0]}")
+        _LOGGER.debug(f"Got ability of AC{id}: {ac_ability.abilities[0]}")
         return ac_ability.abilities[0]
 
     async def _handle_status_message(self, message: AcStatusMessage):

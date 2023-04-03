@@ -1,9 +1,11 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Callable
+
+from airtouch2.protocol.at2plus.messages.AcControl import AcControlMessage, AcSettings
 if TYPE_CHECKING:
     from airtouch2.at2plus.AT2PlusClient import At2PlusClient
 from asyncio import Event
-from airtouch2.protocol.at2plus.enums import AcFanSpeed, AcSetMode
+from airtouch2.protocol.at2plus.enums import AcFanSpeed, AcSetMode, AcSetPower
 from airtouch2.protocol.at2plus.messages.AcAbilityMessage import AcAbility
 from airtouch2.protocol.at2plus.messages.AcStatus import AcStatus
 
@@ -18,8 +20,9 @@ class At2PlusAircon:
     """
     status: AcStatus
     ability: AcAbility | None
-    _ready: Event
 
+    _ready: Event
+    _client: At2PlusClient
     _callbacks: list[Callable] = []
 
     def __init__(self, status: AcStatus, client: At2PlusClient):
@@ -28,29 +31,30 @@ class At2PlusAircon:
         self._ready = Event()
         self._client = client
 
-    def toggle(self):
-        # send msg with client
-        pass
+    async def _set_power(self, power: AcSetPower):
+        settings = AcSettings(self.status.id, power, AcSetMode.UNCHANGED, AcFanSpeed.UNCHANGED, None)
+        await self._client.send(AcControlMessage([settings]))
 
-    def on(self):
-        # send msg with client
-        pass
+    async def toggle(self):
+        await self._set_power(AcSetPower.TOGGLE)
 
-    def off(self):
-        # send msg with client
-        pass
+    async def on(self):
+        await self._set_power(AcSetPower.ON)
 
-    def set_mode(self, mode: AcSetMode):
-        # send msg with client
-        pass
+    async def off(self):
+        await self._set_power(AcSetPower.OFF)
 
-    def set_fan_speed(self, speed: AcFanSpeed):
-        # send msg with client
-        pass
+    async def set_mode(self, mode: AcSetMode):
+        settings = AcSettings(self.status.id, AcSetPower.UNCHANGED, mode, AcFanSpeed.UNCHANGED, None)
+        await self._client.send(AcControlMessage([settings]))
 
-    def set_setpoint(self, setpoint: float):
-        # send msg with client
-        pass
+    async def set_fan_speed(self, speed: AcFanSpeed):
+        settings = AcSettings(self.status.id, AcSetPower.UNCHANGED, AcSetMode.UNCHANGED, speed, None)
+        await self._client.send(AcControlMessage([settings]))
+
+    async def set_setpoint(self, setpoint: float):
+        settings = AcSettings(self.status.id, AcSetPower.UNCHANGED, AcSetMode.UNCHANGED, AcFanSpeed.UNCHANGED, setpoint)
+        await self._client.send(AcControlMessage([settings]))
 
     async def wait_until_ready(self) -> None:
         await self._ready.wait()
@@ -70,7 +74,5 @@ class At2PlusAircon:
             callback()
 
     def _set_ability(self, ability: AcAbility):
-        if (self.ability is not None):
-            raise RuntimeError("AcAbility should only be set once per unit")
         self.ability = ability
         self._ready.set()
