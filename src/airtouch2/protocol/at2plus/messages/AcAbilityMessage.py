@@ -1,32 +1,64 @@
 
 from __future__ import annotations
-from asyncio import StreamReader
 from dataclasses import dataclass
+from enum import IntEnum
 from airtouch2.protocol.at2plus.enums import AcFanSpeed, AcMode
-from airtouch2.protocol.at2plus.extended_common import SUBHEADER_LENGTH, ExtendedMessageSubType, ExtendedSubHeader
+from airtouch2.protocol.at2plus.extended_common import EXTENDED_SUBHEADER_LENGTH, ExtendedMessageSubType, ExtendedSubHeader
 from airtouch2.protocol.at2plus.message_common import Address, Header, MessageType, add_checksum_message_buffer, prime_message_buffer
+from airtouch2.protocol.bits_n_bytes.buffer import Buffer
 from airtouch2.protocol.interfaces import Serializable
 
-AC_ABILITY_LENGTH = 24
+
+class AcAbilitySubDataLength(IntEnum):
+    V1 = 24
+    V1_1 = 26
+
+
+@dataclass
+class SetpointLimits:
+    min: int
+    max: int
+
+    def __repr__(self) -> str:
+        return f"""
+        min: {self.min}
+        max: {self.min}
+        """
+
+
+@dataclass
+class DualSetpointLimits:
+    cool: SetpointLimits
+    heat: SetpointLimits
+
+    def __repr__(self) -> str:
+        return f"""
+        cool: {self.cool}
+        heat: {self.heat}
+        """
 
 
 @dataclass
 class AcAbility(Serializable):
-    number: int
+    ac_number: int
     name: str
     start_group: int
     group_count: int
     supported_modes: list[AcMode]
     supported_fan_speeds: list[AcFanSpeed]
-    min_setpoint: int
-    max_setpoint: int
+    setpoint_limits: SetpointLimits | DualSetpointLimits
 
     @staticmethod
     def from_bytes(data: bytes) -> AcAbility:
-        if len(data) != AC_ABILITY_LENGTH:
-            raise ValueError(f"Data must be {AC_ABILITY_LENGTH} bytes but received {len(data)} bytes")
-        number = data[0]
-        # length = data[1]
+        if len(data) != AcAbilitySubDataLength.V1 and len(data) != AcAbilitySubDataLength.V1_1:
+            raise ValueError(
+                f"Invalid AcAbility length, should be {AcAbilitySubDataLength.V1} or {AcAbilitySubDataLength.V1_1}, got: {len(data)}")
+        ac_number = data[0]
+        following_data_length = data[1]
+        if following_data_length != len(data) - 2:
+            raise ValueError(
+                f"Data length specified in message does not match received data length: specified {following_data_length}, got {len(data) - 2}")
+
         name = data[2:18].decode('ascii').split("\x00")[0]
         start_group = data[18]
         group_count = data[19]
@@ -40,34 +72,41 @@ class AcAbility(Serializable):
             # ditto
             if (data[21] & (1 << i)) > 0:
                 supported_fan_speeds.append(AcFanSpeed.from_int(i))
-        min_setpoint = data[22]
-        max_setpoint = data[23]
-        return AcAbility(number, name, start_group, group_count, supported_modes, supported_fan_speeds, min_setpoint, max_setpoint)
+
+        set_point_limits = SetpointLimits(data[22], data[23])
+        if len(data) == AcAbilitySubDataLength.V1_1:
+            set_point_limits = DualSetpointLimits(set_point_limits, SetpointLimits(data[24], data[25]))
+
+        return AcAbility(
+            ac_number, name, start_group, group_count, supported_modes, supported_fan_speeds, set_point_limits)
 
     def to_bytes(self) -> bytes:
-        data = bytes([self.number, 22]) + self.name.encode("ascii") + \
-            bytes(16-len(self.name)) + \
-            bytes([self.start_group, self.group_count])
+        data = bytes([self.ac_number, (AcAbilitySubDataLength.V1_1 - 2) if isinstance(self.setpoint_limits, DualSetpointLimits) else (
+            AcAbilitySubDataLength.V1 - 2)]) + self.name.encode("ascii") + bytes(16-len(self.name)) + bytes([self.start_group, self.group_count])
         supported_modes_val: int = 0
         for mode in self.supported_modes:
             supported_modes_val |= 1 << mode
         supported_speeds_val: int = 0
         for speed in self.supported_fan_speeds:
             supported_speeds_val |= 1 << speed
-        data += bytes([supported_modes_val, supported_speeds_val,
-                      self.min_setpoint, self.max_setpoint])
+        data += bytes([supported_modes_val, supported_speeds_val])
+        if isinstance(self.setpoint_limits, DualSetpointLimits):
+            data += bytes([self.setpoint_limits.cool.min, self.setpoint_limits.cool.max,
+                          self.setpoint_limits.heat.min, self.setpoint_limits.heat.max])
+        elif isinstance(self.setpoint_limits, SetpointLimits):
+            data += bytes([self.setpoint_limits.min, self.setpoint_limits.max])
+
         return data
 
     def __repr__(self) -> str:
         return f"""
-        number: {self.number}
+        number: {self.ac_number}
         name: {self.name}
         start_group: {self.start_group}
         group_count: {self.group_count}
         supported_modes: {self.supported_modes}
         supported_fan_speeds: {self.supported_fan_speeds}
-        min_setpoint: {self.min_setpoint}
-        max_setpoint: {self.max_setpoint}
+        setpoint_limits: {self.setpoint_limits}
         """
 
 
@@ -80,19 +119,24 @@ class AcAbilityMessage(Serializable):
     @staticmethod
     def from_bytes(subdata: bytes) -> AcAbilityMessage:
         ac_ability_list = []
-
+        # peek the protocol version, assume they all match
+        length = AcAbilitySubDataLength(subdata[1] + 2)
         # Iterate over subdata in steps of AC_ABILITY_LENGTH
-        for i in range(0, len(subdata), AC_ABILITY_LENGTH):
-            subdata_slice = subdata[i:i+AC_ABILITY_LENGTH]
+        for i in range(0, len(subdata), length):
+            subdata_slice = subdata[i:i+length]
             ac_ability = AcAbility.from_bytes(subdata_slice)
             ac_ability_list.append(ac_ability)
-            break #! Ignores the other ACs in the list for now
+            break  # ! Ignores the other ACs in the list for now
         ac_ability_message = AcAbilityMessage(ac_ability_list)
         return ac_ability_message
 
     def to_bytes(self) -> bytes:
-        buffer = prime_message_buffer(Header(
-            Address.EXTENDED, MessageType.EXTENDED, SUBHEADER_LENGTH + AC_ABILITY_LENGTH * len(self.abilities)))
+        length = AcAbilitySubDataLength.V1 if isinstance(
+            self.abilities[0].setpoint_limits, SetpointLimits) else AcAbilitySubDataLength.V1_1
+        buffer = prime_message_buffer(
+            Header(
+                Address.EXTENDED, MessageType.EXTENDED, EXTENDED_SUBHEADER_LENGTH +
+                length * len(self.abilities)))
         buffer.append(ExtendedSubHeader(ExtendedMessageSubType.ABILITY))
         for ability in self.abilities:
             buffer.append(ability)
@@ -107,8 +151,10 @@ class RequestAcAbilityMessage(Serializable):
         self.ac_number = ac_number
 
     def to_bytes(self) -> bytes:
-        buffer = prime_message_buffer(Header(
-            Address.EXTENDED, MessageType.EXTENDED, SUBHEADER_LENGTH + (1 if self.ac_number is not None else 0)))
+        buffer = prime_message_buffer(
+            Header(
+                Address.EXTENDED, MessageType.EXTENDED, EXTENDED_SUBHEADER_LENGTH +
+                (1 if self.ac_number is not None else 0)))
         buffer.append(ExtendedSubHeader(ExtendedMessageSubType.ABILITY))
         if self.ac_number is not None:
             buffer.append_bytes(bytes([self.ac_number]))

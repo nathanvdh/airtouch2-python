@@ -1,5 +1,5 @@
 import unittest
-from airtouch2.protocol.at2plus.control_status_common import SUBHEADER_LENGTH, ControlStatusSubType, SubDataLength, ControlStatusSubHeader
+from airtouch2.protocol.at2plus.control_status_common import CONTROL_STATUS_SUBHEADER_LENGTH, ControlStatusSubType, SubDataLength, ControlStatusSubHeader
 from airtouch2.protocol.at2plus.message_common import Address, Header, MessageType, add_checksum_message_bytes
 
 from airtouch2.protocol.at2plus.messages.AcStatus import AC_STATUS_LENGTH, AcStatus, AcPower, AcMode, AcFanSpeed, AcStatusMessage
@@ -46,7 +46,7 @@ class TestAcStatusMessage(unittest.TestCase):
         msg = AcStatusMessage([status1, status2])
         expected_serial_msg = bytearray(Header(Address.NORMAL,
                                                MessageType.CONTROL_STATUS,
-                                               SUBHEADER_LENGTH + 2*AC_STATUS_LENGTH).to_bytes() +
+                                               CONTROL_STATUS_SUBHEADER_LENGTH + 2*AC_STATUS_LENGTH).to_bytes() +
                                         ControlStatusSubHeader(ControlStatusSubType.AC_STATUS, SubDataLength(0, 2, AC_STATUS_LENGTH)).to_bytes() +
                                         expected1 + expected2 + bytes([0, 0]))
         add_checksum_message_bytes(expected_serial_msg)
@@ -61,7 +61,7 @@ class TestAcStatusMessage(unittest.TestCase):
         msg = AcStatusMessage.from_bytes(subdata)
         expected_serial_msg = bytearray(Header(Address.NORMAL,
                                                MessageType.CONTROL_STATUS,
-                                               SUBHEADER_LENGTH + 2*AC_STATUS_LENGTH).to_bytes() +
+                                               CONTROL_STATUS_SUBHEADER_LENGTH + 2*AC_STATUS_LENGTH).to_bytes() +
                                         ControlStatusSubHeader(ControlStatusSubType.AC_STATUS, SubDataLength(0, 2, AC_STATUS_LENGTH)).to_bytes() +
                                         subdata[0:10] + subdata[10:] + bytes([0, 0]))
         add_checksum_message_bytes(expected_serial_msg)
@@ -71,7 +71,7 @@ class TestAcStatusMessage(unittest.TestCase):
         def test_request(self):
             msg = AcStatusMessage([])
             serialization = msg.to_bytes()
-            expected_serial_msg = bytearray(Header(Address.NORMAL, MessageType.CONTROL_STATUS, SUBHEADER_LENGTH).to_bytes() +
+            expected_serial_msg = bytearray(Header(Address.NORMAL, MessageType.CONTROL_STATUS, CONTROL_STATUS_SUBHEADER_LENGTH).to_bytes() +
                                             ControlStatusSubHeader(ControlStatusSubType.AC_STATUS, SubDataLength(
                                                 0, 0, 0)).to_bytes() + bytes([0, 0])
                                             )

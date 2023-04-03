@@ -2,7 +2,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from airtouch2.protocol.at2plus.algorithm import setpoint_from_value, temperature_from_value, value_from_setpoint, value_from_temperature
-from airtouch2.protocol.at2plus.control_status_common import SUBHEADER_LENGTH, ControlStatusSubType, SubDataLength, ControlStatusSubHeader
+from airtouch2.protocol.at2plus.control_status_common import CONTROL_STATUS_SUBHEADER_LENGTH, ControlStatusSubType, SubDataLength, ControlStatusSubHeader
 from airtouch2.protocol.at2plus.enums import AcFanSpeed, AcMode, AcPower
 from airtouch2.protocol.at2plus.message_common import Address, Header, MessageType, add_checksum_message_buffer, prime_message_buffer
 from airtouch2.protocol.bits_n_bytes.buffer import Buffer
@@ -94,7 +94,7 @@ class AcStatusMessage(Serializable):
         subheader = ControlStatusSubHeader(ControlStatusSubType.AC_STATUS, SubDataLength(
             0, len(self.statuses), AC_STATUS_LENGTH))
         buffer = prime_message_buffer(Header(
-            Address.NORMAL, MessageType.CONTROL_STATUS, SUBHEADER_LENGTH + subheader.subdata_length.total()))
+            Address.NORMAL, MessageType.CONTROL_STATUS, CONTROL_STATUS_SUBHEADER_LENGTH + subheader.subdata_length.total()))
         buffer.append(subheader)
         for status in self.statuses:
             buffer.append(status)

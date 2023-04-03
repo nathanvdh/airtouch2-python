@@ -6,7 +6,7 @@ from airtouch2.protocol.bits_n_bytes.buffer import Buffer
 from airtouch2.protocol.interfaces import Serializable
 
 
-SUBHEADER_LENGTH = 8
+CONTROL_STATUS_SUBHEADER_LENGTH = 8
 SUBDATALENGTH_LENGTH = 6
 
 
@@ -66,7 +66,7 @@ class ControlStatusSubHeader(Serializable):
 
     @staticmethod
     def from_bytes(subheader_bytes: bytes) -> ControlStatusSubHeader:
-        if len(subheader_bytes) != SUBHEADER_LENGTH:
+        if len(subheader_bytes) != CONTROL_STATUS_SUBHEADER_LENGTH:
             raise ValueError("Unexpected control/status subheader size")
         subtype = ControlStatusSubType(subheader_bytes[0])
         data_length = SubDataLength.from_bytes(subheader_bytes[2:8])
@@ -74,7 +74,7 @@ class ControlStatusSubHeader(Serializable):
 
     @staticmethod
     def from_buffer(buffer: Buffer) -> ControlStatusSubHeader:
-        return ControlStatusSubHeader.from_bytes(buffer.read_bytes(SUBHEADER_LENGTH))
+        return ControlStatusSubHeader.from_bytes(buffer.read_bytes(CONTROL_STATUS_SUBHEADER_LENGTH))
 
     def to_bytes(self) -> bytes:
         return self.sub_type.to_bytes(1, 'big') + \
