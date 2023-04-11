@@ -21,8 +21,8 @@ class AcStatusLogger:
 
     def __init__(self, client: At2PlusClient):
         self.client = client
-        self.cleanup_callbacks = []
         self.acs = []
+        self.cleanup_callbacks = []
         self.cleanup_callbacks.append(client.add_new_ac_callback(self.new_ac))
 
     def new_ac(self):
@@ -51,8 +51,9 @@ class Ac0Waiter:
 
     def __init__(self, client: At2PlusClient):
         self.client = client
-        self.ac0 = None
         self.cleanup_callbacks = []
+        self.ac0 = None
+        self.found_ac0 = asyncio.Event()
         self.cleanup_callbacks.append(client.add_new_ac_callback(self.new_ac))
 
     def new_ac(self):

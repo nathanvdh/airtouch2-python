@@ -8,7 +8,7 @@ from airtouch2.protocol.at2plus.messages.AcAbilityMessage import AcAbilitySubDat
 
 class TestAcAbility(unittest.TestCase):
     def test_v1(self):
-        number: int = 1
+        id: int = 1
         name: str = "helloworld"
         start_group: int = 3
         group_count: int = 2
@@ -17,7 +17,7 @@ class TestAcAbility(unittest.TestCase):
             AcFanSpeed.AUTO, AcFanSpeed.LOW, AcFanSpeed.HIGH]
         min_setpoint: int = 17
         max_setpoint: int = 30
-        raw = bytes([number, AcAbilitySubDataLength.V1 - 2]) + name.encode("ascii") + \
+        raw = bytes([id, AcAbilitySubDataLength.V1 - 2]) + name.encode("ascii") + \
             bytes(16-len(name)) + bytes([start_group, group_count])
         supported_modes_val: int = 0
         for mode in supported_modes:
@@ -28,7 +28,7 @@ class TestAcAbility(unittest.TestCase):
         raw += bytes([supported_modes_val, supported_speeds_val,
                      min_setpoint, max_setpoint])
         ability = AcAbility.from_bytes(raw)
-        self.assertEqual(number, ability.ac_id)
+        self.assertEqual(id, ability.ac_id)
         self.assertEqual(name, ability.name)
         self.assertEqual(start_group, ability.start_group)
         self.assertEqual(group_count, ability.group_count)
@@ -41,7 +41,7 @@ class TestAcAbility(unittest.TestCase):
         self.assertEqual(raw, ability.to_bytes())
 
     def test_v1_1(self):
-        number: int = 1
+        id: int = 1
         name: str = "helloworld"
         start_group: int = 3
         group_count: int = 2
@@ -52,7 +52,7 @@ class TestAcAbility(unittest.TestCase):
         max_setpoint_cool: int = 25
         min_setpoint_heat: int = 22
         max_setpoint_heat: int = 30
-        raw = bytes([number, AcAbilitySubDataLength.V1_1 - 2]) + name.encode("ascii") + \
+        raw = bytes([id, AcAbilitySubDataLength.V1_1 - 2]) + name.encode("ascii") + \
             bytes(16-len(name)) + bytes([start_group, group_count])
         supported_modes_val: int = 0
         for mode in supported_modes:
@@ -63,7 +63,7 @@ class TestAcAbility(unittest.TestCase):
         raw += bytes([supported_modes_val, supported_speeds_val,
                      min_setpoint_cool, max_setpoint_cool, min_setpoint_heat, max_setpoint_heat])
         ability = AcAbility.from_bytes(raw)
-        self.assertEqual(number, ability.ac_id)
+        self.assertEqual(id, ability.ac_id)
         self.assertEqual(name, ability.name)
         self.assertEqual(start_group, ability.start_group)
         self.assertEqual(group_count, ability.group_count)

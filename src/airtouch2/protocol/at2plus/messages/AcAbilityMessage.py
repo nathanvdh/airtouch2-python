@@ -99,7 +99,7 @@ class AcAbility(Serializable):
 
     def __repr__(self) -> str:
         return f"""
-        number: {self.ac_id}
+        id: {self.ac_id}
         name: {self.name}
         start_group: {self.start_group}
         group_count: {self.group_count}
@@ -144,18 +144,18 @@ class AcAbilityMessage(Serializable):
 
 
 class RequestAcAbilityMessage(Serializable):
-    ac_number: int | None
+    ac_id: int | None
 
-    def __init__(self, ac_number: int | None = None):
-        self.ac_number = ac_number
+    def __init__(self, ac_id: int | None = None):
+        self.ac_id = ac_id
 
     def to_bytes(self) -> bytes:
         buffer = prime_message_buffer(
             Header(
                 Address.EXTENDED, MessageType.EXTENDED, EXTENDED_SUBHEADER_LENGTH +
-                (1 if self.ac_number is not None else 0)))
+                (1 if self.ac_id is not None else 0)))
         buffer.append(ExtendedSubHeader(ExtendedMessageSubType.ABILITY))
-        if self.ac_number is not None:
-            buffer.append_bytes(bytes([self.ac_number]))
+        if self.ac_id is not None:
+            buffer.append_bytes(bytes([self.ac_id]))
         add_checksum_message_buffer(buffer)
         return buffer.to_bytes()

@@ -17,20 +17,20 @@ class SetpointControl(IntEnum):
 
 
 class AcSettings(Serializable):
-    number: int
+    id: int
     power: AcSetPower
     mode: AcSetMode
     speed: AcFanSpeed
     setpoint: float | None
 
-    def __init__(self, ac_number: int, power: AcSetPower, mode: AcSetMode, speed: AcFanSpeed, setpoint: float | None = None):
+    def __init__(self, ac_id: int, power: AcSetPower, mode: AcSetMode, speed: AcFanSpeed, setpoint: float | None = None):
         if setpoint is not None:
             if not Limits.SETPOINT_MIN <= setpoint <= Limits.SETPOINT_MAX:
                 raise ValueError(
                     f'Setpoint must be from {Limits.SETPOINT_MIN} to {Limits.SETPOINT_MAX}')
-        if not 0 <= ac_number < Limits.MAX_ACS:
-            raise ValueError(f'AC number must be from 0 to {Limits.MAX_ACS-1}')
-        self.number = ac_number
+        if not 0 <= ac_id < Limits.MAX_ACS:
+            raise ValueError(f'AC ID must be from 0 to {Limits.MAX_ACS-1}')
+        self.id = ac_id
         self.power = power
         self.mode = mode
         self.speed = speed
@@ -38,7 +38,7 @@ class AcSettings(Serializable):
 
     def to_bytes(self) -> bytes:
         data = bytearray(AC_SETTINGS_LENGTH)
-        data[0] = (self.power << 4) | self.number
+        data[0] = (self.power << 4) | self.id
         data[1] = (self.mode << 4) | self.speed
         data[2] = SetpointControl.CHANGE if self.setpoint is not None else SetpointControl.KEEP
         data[3] = value_from_setpoint(self.setpoint)
