@@ -17,8 +17,8 @@ NON_DATA_LENGTH = 10
 class CommonMessageOffsets(IntEnum):
     # Header is 0x55 0x55
     HEADER = 0
-    # 0x80 0xb0 when sending, 0x80 0x80 for receiving
-    # Except extended message which is 0x90 0xb0 when sending and 0x90 0x90 when receiving
+    # 0x80 0xb0 when sending, 0x?? 0x80 for receiving
+    # Except extended message which is 0x90 0xb0 when sending and 0x?? 0x90 when receiving
     ADDRESS = 2
     # 'Can be any data' - response will match
     MESAGE_ID = 4
@@ -63,9 +63,7 @@ class Header(Serializable):
             if (b != HEADER_MAGIC):
                 raise ValueError("Message header magic is invalid")
         type = MessageType(header_bytes[CommonMessageOffsets.MESSAGE_TYPE])
-        if header_bytes[CommonMessageOffsets.ADDRESS] != ADDRESS_CONSTANT:
-            raise ValueError(
-                f"Unexpected address byte: expected {hex(ADDRESS_CONSTANT)}, got {hex(header_bytes[CommonMessageOffsets.ADDRESS])}")
+        # Ignore the first byte of the address, as it's undefined for received messages.
         address = Address(header_bytes[CommonMessageOffsets.ADDRESS+1])
         if type == MessageType.CONTROL_STATUS:
             if (address != Address.NORMAL):
