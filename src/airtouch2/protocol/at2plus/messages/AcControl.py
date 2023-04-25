@@ -48,13 +48,13 @@ class AcSettings(Serializable):
     def from_bytes(data: bytes) -> AcSettings:
         if (len(data) != AC_SETTINGS_LENGTH):
             raise ValueError(f"Data must be {AC_SETTINGS_LENGTH} bytes")
-        number = data[0] & 0x0F
+        id = data[0] & 0x0F
         power = AcSetPower.from_int((data[0] & 0xF0) >> 4)
         mode = AcSetMode.from_int((data[1] & 0xF0) >> 4)
         speed = AcFanSpeed.from_int(data[1] & 0x0F)
         change_setpoint = data[2] == SetpointControl.CHANGE
         setpoint = setpoint_from_value(data[3]) if change_setpoint else None
-        return AcSettings(number, power, mode, speed, setpoint)
+        return AcSettings(id, power, mode, speed, setpoint)
 
 
 class AcControlMessage(Serializable):
