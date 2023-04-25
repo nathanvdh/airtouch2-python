@@ -6,11 +6,11 @@ class TestSubDataLength(unittest.TestCase):
     def test_serialize(self):
         sdl = SubDataLength(1, 5, 2)
         serialized = sdl.to_bytes()
-        expected = (1).to_bytes(2, 'big') + (5).to_bytes(2, 'big') + (2).to_bytes(2, 'big')
+        expected = (1).to_bytes(2, 'big') + (2).to_bytes(2, 'big') + (5).to_bytes(2, 'big')
         self.assertEqual(serialized, expected)
 
     def test_deserialize(self):
-        raw = (1).to_bytes(2, 'big') + (5).to_bytes(2, 'big') + (2).to_bytes(2, 'big')
+        raw = (1).to_bytes(2, 'big') + (2).to_bytes(2, 'big') + (5).to_bytes(2, 'big')
         sdl = SubDataLength.from_bytes(raw)
         serialized = sdl.to_bytes()
         self.assertEqual(raw, serialized)

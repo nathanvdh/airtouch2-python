@@ -20,10 +20,10 @@ class ControlStatusOffsets(IntEnum):
     # 2nd byte empty
     # bytes 3-4 are 'normal data' length
     NORMAL_DATA_LENGTH = 2
-    # bytes 5-6 are number of repeated 'repeat data's
-    REPEAT_DATA_COUNT = 4
-    # bytes 7-8 are each 'repeat data' length
-    REPEAT_DATA_LENGTH = 6
+    # bytes 5-6 are each 'repeat data' length
+    REPEAT_DATA_LENGTH = 4
+    # bytes 7-8 are number of repeated 'repeat data's
+    REPEAT_DATA_COUNT = 6
     SUBDATA = 8
 
 
@@ -49,14 +49,14 @@ class SubDataLength(Serializable):
         if len(length_bytes) != SUBDATALENGTH_LENGTH:
             raise ValueError("Unexpected SubDataLength size")
         normal = int.from_bytes(length_bytes[0:2], 'big')
-        repeat_count = int.from_bytes(length_bytes[2:4], 'big')
-        repeat_length = int.from_bytes(length_bytes[4:6], 'big')
+        repeat_length = int.from_bytes(length_bytes[2:4], 'big')
+        repeat_count = int.from_bytes(length_bytes[4:6], 'big')
         return SubDataLength(normal, repeat_count, repeat_length)
 
     def to_bytes(self) -> bytes:
         return self.normal.to_bytes(2, 'big') + \
-            self.repeat_count.to_bytes(2, 'big') + \
-            self.repeat_length.to_bytes(2, 'big')
+            self.repeat_length.to_bytes(2, 'big') + \
+            self.repeat_count.to_bytes(2, 'big')
 
 
 @dataclass
