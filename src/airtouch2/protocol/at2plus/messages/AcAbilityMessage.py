@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from enum import IntEnum
 from airtouch2.protocol.at2plus.enums import AcFanSpeed, AcSetMode
 from airtouch2.protocol.at2plus.extended_common import EXTENDED_SUBHEADER_LENGTH, ExtendedMessageSubType, ExtendedSubHeader
-from airtouch2.protocol.at2plus.message_common import Address, Header, MessageType, add_checksum_message_buffer, prime_message_buffer
+from airtouch2.protocol.at2plus.message_common import AddressMsgType, Header, MessageType, add_checksum_message_buffer, prime_message_buffer
 from airtouch2.protocol.interfaces import Serializable
 
 
@@ -134,7 +134,7 @@ class AcAbilityMessage(Serializable):
             self.abilities[0].setpoint_limits, SetpointLimits) else AcAbilitySubDataLength.V1_1
         buffer = prime_message_buffer(
             Header(
-                Address.EXTENDED, MessageType.EXTENDED, EXTENDED_SUBHEADER_LENGTH +
+                AddressMsgType.EXTENDED, MessageType.EXTENDED, EXTENDED_SUBHEADER_LENGTH +
                 length * len(self.abilities)))
         buffer.append(ExtendedSubHeader(ExtendedMessageSubType.ABILITY))
         for ability in self.abilities:
@@ -152,7 +152,7 @@ class RequestAcAbilityMessage(Serializable):
     def to_bytes(self) -> bytes:
         buffer = prime_message_buffer(
             Header(
-                Address.EXTENDED, MessageType.EXTENDED, EXTENDED_SUBHEADER_LENGTH +
+                AddressMsgType.EXTENDED, MessageType.EXTENDED, EXTENDED_SUBHEADER_LENGTH +
                 (1 if self.ac_id is not None else 0)))
         buffer.append(ExtendedSubHeader(ExtendedMessageSubType.ABILITY))
         if self.ac_id is not None:

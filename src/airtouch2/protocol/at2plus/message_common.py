@@ -10,7 +10,6 @@ from airtouch2.protocol.interfaces import Serializable
 MESSAGE_ID = 1
 HEADER_MAGIC = 0x55
 HEADER_LENGTH = 8
-ADDRESS_CONSTANT = 0xB0
 NON_DATA_LENGTH = 10
 
 
@@ -30,8 +29,11 @@ class CommonMessageOffsets(IntEnum):
     # Data length depends on message
     # Followed by 2-byte CRC16 MODBUS of message *without* header (AKA CRC-16-ANSI AKA CRC-16-IBM)
 
+class AddressSource(IntEnum):
+    SELF = 0xB0
+    OTHER = 0x9F
 
-class Address(IntEnum):
+class AddressMsgType(IntEnum):
     UNSET = 0
     NORMAL = 0x80
     EXTENDED = 0x90
@@ -44,13 +46,13 @@ class MessageType(IntEnum):
 
 
 class Header(Serializable):
-    address: Address
+    address_msg_type: AddressMsgType
     type: MessageType
     data_length: int
     _received: bool
 
-    def __init__(self, address: Address, type: MessageType, data_length: int, _received=False):
-        self.address = address
+    def __init__(self, address_msg_type: AddressMsgType, type: MessageType, data_length: int, _received=False):
+        self.address_msg_type = address_msg_type
         self.type = type
         self.data_length = data_length
         self._received = _received
@@ -63,26 +65,24 @@ class Header(Serializable):
             if (b != HEADER_MAGIC):
                 raise ValueError("Message header magic is invalid")
         type = MessageType(header_bytes[CommonMessageOffsets.MESSAGE_TYPE])
-        if header_bytes[CommonMessageOffsets.ADDRESS] != ADDRESS_CONSTANT:
-            raise ValueError(
-                f"Unexpected address byte: expected {hex(ADDRESS_CONSTANT)}, got {hex(header_bytes[CommonMessageOffsets.ADDRESS])}")
-        address = Address(header_bytes[CommonMessageOffsets.ADDRESS+1])
+        address_src = AddressSource(header_bytes[CommonMessageOffsets.ADDRESS])
+        address_msg_type = AddressMsgType(header_bytes[CommonMessageOffsets.ADDRESS+1])
         if type == MessageType.CONTROL_STATUS:
-            if (address != Address.NORMAL):
+            if (address_msg_type != AddressMsgType.NORMAL):
                 raise ValueError(f"Message address value is invalid: {header_bytes.hex(':')}")
         elif type == MessageType.EXTENDED:
-            if (address != Address.EXTENDED):
+            if (address_msg_type != AddressMsgType.EXTENDED):
                 raise ValueError(f"Message address value is invalid: {header_bytes.hex(':')}")
         else:
             raise ValueError("Message type is invalid")
         id = header_bytes[CommonMessageOffsets.MESAGE_ID]
         data_length = int.from_bytes(
             header_bytes[CommonMessageOffsets.DATA_LENGTH:CommonMessageOffsets.DATA], 'big')
-        return Header(address, type, data_length, True)
+        return Header(address_msg_type, type, data_length, True)
 
     def to_bytes(self) -> bytes:
         return bytes([HEADER_MAGIC, HEADER_MAGIC]) + \
-            (bytes([ADDRESS_CONSTANT, self.address]) if self._received else bytes([self.address, ADDRESS_CONSTANT])) + \
+            (bytes([AddressSource.SELF, self.address_msg_type]) if self._received else bytes([self.address_msg_type, AddressSource.SELF])) + \
             bytes([MESSAGE_ID, self.type]) + \
             self.data_length.to_bytes(2, 'big')
 

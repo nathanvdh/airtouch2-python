@@ -2,7 +2,7 @@ import unittest
 
 from airtouch2.protocol.at2plus.enums import AcFanSpeed, AcSetMode
 from airtouch2.protocol.at2plus.extended_common import EXTENDED_SUBHEADER_LENGTH, SUBHEADER_MAGIC, ExtendedSubHeader
-from airtouch2.protocol.at2plus.message_common import Address, Header, MessageType, add_checksum_message_bytes
+from airtouch2.protocol.at2plus.message_common import AddressMsgType, Header, MessageType, add_checksum_message_bytes
 from airtouch2.protocol.at2plus.messages.AcAbilityMessage import AcAbilitySubDataLength, AcAbility, AcAbilityMessage, DualSetpointLimits, ExtendedMessageSubType, RequestAcAbilityMessage, SetpointLimits
 
 
@@ -87,7 +87,7 @@ class TestAcAbilityMessage(unittest.TestCase):
         serialized = msg.to_bytes()
         expected_serial_msg = bytearray(
             Header(
-                Address.EXTENDED, MessageType.EXTENDED, EXTENDED_SUBHEADER_LENGTH +
+                AddressMsgType.EXTENDED, MessageType.EXTENDED, EXTENDED_SUBHEADER_LENGTH +
                 AcAbilitySubDataLength.V1).to_bytes() +
             ExtendedSubHeader(ExtendedMessageSubType.ABILITY).to_bytes() + subdata +
             bytes([0, 0]))
@@ -97,13 +97,13 @@ class TestAcAbilityMessage(unittest.TestCase):
     def test_request(self):
         msg = RequestAcAbilityMessage(3)
         serialized = msg.to_bytes()
-        expected = bytearray(Header(Address.EXTENDED, MessageType.EXTENDED, EXTENDED_SUBHEADER_LENGTH +
+        expected = bytearray(Header(AddressMsgType.EXTENDED, MessageType.EXTENDED, EXTENDED_SUBHEADER_LENGTH +
                                     1).to_bytes() + bytes([SUBHEADER_MAGIC, ExtendedMessageSubType.ABILITY, 3, 0, 0]))
         add_checksum_message_bytes(expected)
         self.assertEqual(serialized.hex(':'), expected.hex(':'))
 
         msg = RequestAcAbilityMessage()
         serialized = msg.to_bytes()
-        expected = bytearray(Header(Address.EXTENDED, MessageType.EXTENDED, EXTENDED_SUBHEADER_LENGTH +
+        expected = bytearray(Header(AddressMsgType.EXTENDED, MessageType.EXTENDED, EXTENDED_SUBHEADER_LENGTH +
                                     1).to_bytes() + bytes([SUBHEADER_MAGIC, ExtendedMessageSubType.ABILITY, 0, 0]))
         add_checksum_message_bytes(expected)

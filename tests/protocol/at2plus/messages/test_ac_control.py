@@ -4,7 +4,7 @@ from airtouch2.protocol.at2plus.constants import Limits
 from airtouch2.protocol.at2plus.control_status_common import CONTROL_STATUS_SUBHEADER_LENGTH, ControlStatusSubType, SubDataLength, ControlStatusSubHeader
 
 from airtouch2.protocol.at2plus.enums import AcFanSpeed, AcSetMode, AcSetPower
-from airtouch2.protocol.at2plus.message_common import Address, Header, MessageType, add_checksum_message_bytes
+from airtouch2.protocol.at2plus.message_common import AddressMsgType, Header, MessageType, add_checksum_message_bytes
 from airtouch2.protocol.at2plus.messages.AcControl import AC_SETTINGS_LENGTH, AcControlMessage, AcSettings
 
 
@@ -65,7 +65,7 @@ class TestAcControlMessage(unittest.TestCase):
         settings = [settings1, settings2]
         msg = AcControlMessage(settings)
         serialized = msg.to_bytes()
-        expected = bytearray(Header(Address.NORMAL, MessageType.CONTROL_STATUS,
+        expected = bytearray(Header(AddressMsgType.NORMAL, MessageType.CONTROL_STATUS,
                              CONTROL_STATUS_SUBHEADER_LENGTH + 2*AC_SETTINGS_LENGTH).to_bytes() +
                              ControlStatusSubHeader(ControlStatusSubType.AC_CONTROL, SubDataLength(0, 2, AC_SETTINGS_LENGTH)).to_bytes() +
                              expected1 + expected2 + bytes([0, 0]))
