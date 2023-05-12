@@ -1,6 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from enum import IntEnum
+import logging
 
 from airtouch2.protocol.bits_n_bytes.buffer import Buffer
 from airtouch2.protocol.bits_n_bytes.crc16_modbus import crc16
@@ -11,6 +12,8 @@ MESSAGE_ID = 1
 HEADER_MAGIC = 0x55
 HEADER_LENGTH = 8
 NON_DATA_LENGTH = 10
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class CommonMessageOffsets(IntEnum):
@@ -64,7 +67,11 @@ class Header(Serializable):
         for b in header_bytes[CommonMessageOffsets.HEADER:CommonMessageOffsets.ADDRESS]:
             if (b != HEADER_MAGIC):
                 raise ValueError("Message header magic is invalid")
-        type = MessageType(header_bytes[CommonMessageOffsets.MESSAGE_TYPE])
+        try:
+            type = MessageType(header_bytes[CommonMessageOffsets.MESSAGE_TYPE])
+        except ValueError as e:
+            _LOGGER.error(f"Unknown message type in header ({hex(header_bytes[CommonMessageOffsets.MESSAGE_TYPE])})", exc_info=e)
+            type = MessageType.UNSET
         address_src = AddressSource(header_bytes[CommonMessageOffsets.ADDRESS])
         address_msg_type = AddressMsgType(header_bytes[CommonMessageOffsets.ADDRESS+1])
         if type == MessageType.CONTROL_STATUS:
@@ -73,8 +80,6 @@ class Header(Serializable):
         elif type == MessageType.EXTENDED:
             if (address_msg_type != AddressMsgType.EXTENDED):
                 raise ValueError(f"Message address value is invalid: {header_bytes.hex(':')}")
-        else:
-            raise ValueError("Message type is invalid")
         id = header_bytes[CommonMessageOffsets.MESAGE_ID]
         data_length = int.from_bytes(
             header_bytes[CommonMessageOffsets.DATA_LENGTH:CommonMessageOffsets.DATA], 'big')

@@ -7,7 +7,7 @@ from socket import gaierror
 from typing import Callable
 
 from airtouch2.at2plus.AT2PlusAircon import At2PlusAircon
-from airtouch2.protocol.at2plus.message_common import HEADER_LENGTH
+from airtouch2.protocol.at2plus.message_common import HEADER_LENGTH, HEADER_MAGIC
 from airtouch2.protocol.at2plus.control_status_common import ControlStatusSubType, ControlStatusSubHeader
 from airtouch2.protocol.at2plus.extended_common import ExtendedMessageSubType, ExtendedSubHeader
 from airtouch2.protocol.at2plus.message_common import Header, Message, MessageType
@@ -137,11 +137,30 @@ class At2PlusClient:
         _LOGGER.debug(f"Read payload of size {size}: {data.hex(':')}")
         return data
 
+    async def _read_magic(self) -> bytes:
+        found_magic: bool = False
+        while not found_magic:
+            # search for first magic byte
+            byte = await self._read_bytes(1)
+            while (byte is None or byte[0] != HEADER_MAGIC):
+                byte = await self._read_bytes(1)
+
+            # have seen one magic byte, next one must also be, for this to be the header
+            byte = await self._read_bytes(1)
+            if (byte is not None and byte[0] == HEADER_MAGIC):
+                found_magic = True
+        return bytes([HEADER_MAGIC, HEADER_MAGIC])
+
     async def _read_header(self) -> tuple[Header, bytes]:
         """Try to read header until successful. Returns the raw bytes as well for validating checksum"""
-        header_bytes = await self._read_bytes(HEADER_LENGTH)
-        while not header_bytes:
-            header_bytes = await self._read_bytes(HEADER_LENGTH)
+        header_bytes = bytearray()
+        header_bytes += await self._read_magic()
+
+        header_remainder = await self._read_bytes(HEADER_LENGTH-2)
+        while not header_remainder:
+            header_remainder = await self._read_bytes(HEADER_LENGTH-2)
+        header_bytes += header_remainder
+
         try:
             header = Header.from_bytes(header_bytes)
         except ValueError as e:
@@ -202,9 +221,12 @@ class At2PlusClient:
                         await self._ability_message_queue.put(ability)
                     else:
                         _LOGGER.warning(f"Unhandled message type: {subheader.sub_type}")
+                else:
+                    _LOGGER.error(
+                        f"Unknown message type, header={message.header.to_bytes().hex(':')}, data={message.data_buffer.to_bytes().hex(':')}")
+
             except Exception as e:
-                _LOGGER.error(f"Error in main loop: {e}")
-                
+                _LOGGER.error(f"Error in main loop", exc_info=e)
 
     def add_new_ac_callback(self, callback: Callable):
         self._new_ac_callbacks.append(callback)
