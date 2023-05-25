@@ -2,11 +2,11 @@
 from __future__ import annotations
 from enum import IntEnum
 from airtouch2.protocol.at2plus.constants import Limits
-from airtouch2.protocol.at2plus.algorithm import setpoint_from_value, value_from_setpoint
+from airtouch2.protocol.at2plus.conversions import setpoint_from_value, value_from_setpoint
 from airtouch2.protocol.at2plus.control_status_common import CONTROL_STATUS_SUBHEADER_LENGTH, ControlStatusSubType, SubDataLength, ControlStatusSubHeader
 from airtouch2.protocol.at2plus.enums import AcFanSpeed, AcSetMode, AcSetPower
 from airtouch2.protocol.at2plus.message_common import AddressMsgType, Header, MessageType, add_checksum_message_buffer, prime_message_buffer
-from airtouch2.protocol.interfaces import Serializable
+from airtouch2.common.interfaces import Serializable
 
 AC_SETTINGS_LENGTH = 4
 

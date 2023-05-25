@@ -1,59 +1,71 @@
-from airtouch2.protocol.at2.messages.CommandMessage import CommandMessage
-from airtouch2.protocol.at2.constants import ACCommands, CommandMessageConstants, CommandMessageType
+from airtouch2.protocol.at2.message_common import add_checksum_message_buffer
+from airtouch2.protocol.at2.constants import ACCommands, CommandMessageConstants, CommandMessageType, MessageLength
 from airtouch2.protocol.at2.enums import ACMode
-
-class ACCommand(CommandMessage):
-    """Base class from which all AC control messages are derived"""
-    def __init__(self, target_ac_number: int):
-        super().__init__()
-        self.target_ac = target_ac_number
-
-    def _serialize(self, prefilled_msg: bytearray) -> bytearray:
-        prefilled_msg[1] = CommandMessageType.AC_CONTROL
-        prefilled_msg[3] = self.target_ac
-        return super()._serialize(prefilled_msg)
+from airtouch2.common.Buffer import Buffer
+from airtouch2.common.interfaces import Serializable
 
 
-class ChangeSetTemperature(ACCommand):
-    """Command to increment or decrement the AC set point by 1 degree"""
+def prime_ac_control_message_buffer(target_ac: int) -> Buffer:
+    buffer = Buffer(MessageLength.COMMAND)
+    buffer.append_bytes(CommandMessageConstants.BYTE_0.to_bytes(1, 'little'))
+    buffer.append_bytes(CommandMessageType.AC_CONTROL.to_bytes(1, 'little'))
+    buffer.append_bytes(CommandMessageConstants.BYTE_2.to_bytes(1, 'little'))
+    buffer.append_bytes(target_ac.to_bytes(1, 'little'))
+    return buffer
+
+
+class ChangeSetTemperature(Serializable):
     def __init__(self, target_ac_number: int, inc: bool):
-        super().__init__(target_ac_number)
+        self.target_ac = target_ac_number
         self.inc = inc
 
-    def serialize(self) -> bytearray:
-        serial_msg: bytearray = bytearray(self.length)
-        serial_msg[4] = ACCommands.TEMP_INC if self.inc else ACCommands.TEMP_DEC
-        return super()._serialize(serial_msg)
+    def to_bytes(self) -> bytes:
+        buffer = prime_ac_control_message_buffer(self.target_ac)
+        inc_dec = ACCommands.TEMP_INC if self.inc else ACCommands.TEMP_DEC
+        buffer.append_bytes(inc_dec.to_bytes(1, 'little'))
+        buffer.append_bytes(bytes([0, 0, 0, 0, 0, 0, 0]))
+        add_checksum_message_buffer(buffer)
+        return buffer.to_bytes()
 
-class ToggleAC(ACCommand):
-    """Command to toggle an AC on or off"""
 
-    def serialize(self) -> bytearray:
-        serial_msg: bytearray = bytearray(self.length)
-        serial_msg[4] = CommandMessageConstants.TOGGLE
-        return super()._serialize(serial_msg)
+class ToggleAc(Serializable):
+    def __init__(self, target_ac_number: int):
+        self.target_ac = target_ac_number
+
+    def to_bytes(self) -> bytes:
+        buffer = prime_ac_control_message_buffer(self.target_ac)
+        # buffer.append_bytes(bytes([0]))
+        buffer.append_bytes(CommandMessageConstants.TOGGLE.to_bytes(1, 'little'))
+        buffer.append_bytes(bytes([0, 0, 0, 0, 0, 0, 0]))
+        add_checksum_message_buffer(buffer)
+        return buffer.to_bytes()
 
 # needs investigation
-class SetFanSpeed(ACCommand):
-    """Command to set the AC fan speed"""
+
+
+class SetFanSpeed(Serializable):
     def __init__(self, target_ac_number: int, fan_speed: int):
-        super().__init__(target_ac_number)
-        self.fan_speed: int = fan_speed
+        self.target_ac = target_ac_number
+        self.fan_speed = fan_speed
 
-    def serialize(self) -> bytearray:
-        serial_msg: bytearray = bytearray(self.length)
-        serial_msg[4] = ACCommands.SET_FAN_SPEED
-        serial_msg[5] = self.fan_speed
-        return super()._serialize(serial_msg)
+    def to_bytes(self) -> bytes:
+        buffer = prime_ac_control_message_buffer(self.target_ac)
+        buffer.append_bytes(ACCommands.SET_FAN_SPEED.to_bytes(1, 'little'))
+        buffer.append_bytes(self.fan_speed.to_bytes(1, 'little'))
+        buffer.append_bytes(bytes([0, 0, 0, 0, 0, 0]))
+        add_checksum_message_buffer(buffer)
+        return buffer.to_bytes()
 
-class SetMode(ACCommand):
-    """Command to set the AC mode to one of those in ACMode"""
+
+class SetMode(Serializable):
     def __init__(self, target_ac_number: int, mode: ACMode):
-        super().__init__(target_ac_number)
-        self.mode: ACMode = mode
+        self.target_ac = target_ac_number
+        self.mode = mode
 
-    def serialize(self) -> bytearray:
-        serial_msg: bytearray = bytearray(self.length)
-        serial_msg[4] = ACCommands.SET_MODE
-        serial_msg[5] = self.mode
-        return super()._serialize(serial_msg)
+    def to_bytes(self) -> bytes:
+        buffer = prime_ac_control_message_buffer(self.target_ac)
+        buffer.append_bytes(ACCommands.SET_MODE.to_bytes(1, 'little'))
+        buffer.append_bytes(self.mode.to_bytes(1, 'little'))
+        buffer.append_bytes(bytes([0, 0, 0, 0, 0, 0]))
+        add_checksum_message_buffer(buffer)
+        return buffer.to_bytes()

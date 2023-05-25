@@ -1,8 +1,13 @@
 from __future__ import annotations
-from airtouch2.protocol.interfaces import Serializable
+from airtouch2.common.interfaces import Serializable
 
 
 class Buffer(Serializable):
+    """
+    Layer of asbtraction on top of bytearray.
+    Has a fixed size and enforces it's filled before it's serialized.
+    Prohibits reading more than its size and before it's filled.
+    """
     data: bytearray
     head: int = 0
     tail: int = 0
@@ -45,6 +50,8 @@ class Buffer(Serializable):
             raise BufferError("All data from this buffer has been read")
         if (self.tail >= self.head):
             raise BufferError("There is not data to read")
+        if (self.mutable):
+            raise BufferError("Cannot read from incomplete buffer")
         start = self.tail
         self.tail += size
         return self.data[start:self.tail]

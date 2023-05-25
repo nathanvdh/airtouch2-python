@@ -3,9 +3,9 @@ from dataclasses import dataclass
 from enum import IntEnum
 import logging
 
-from airtouch2.protocol.bits_n_bytes.buffer import Buffer
-from airtouch2.protocol.bits_n_bytes.crc16_modbus import crc16
-from airtouch2.protocol.interfaces import Serializable
+from airtouch2.common.Buffer import Buffer
+from airtouch2.protocol.at2plus.crc16_modbus import crc16
+from airtouch2.common.interfaces import Serializable
 
 # Message ID can be whatever
 MESSAGE_ID = 1
@@ -32,9 +32,11 @@ class CommonMessageOffsets(IntEnum):
     # Data length depends on message
     # Followed by 2-byte CRC16 MODBUS of message *without* header (AKA CRC-16-ANSI AKA CRC-16-IBM)
 
+
 class AddressSource(IntEnum):
     SELF = 0xB0
     OTHER = 0x9F
+
 
 class AddressMsgType(IntEnum):
     UNSET = 0
@@ -70,7 +72,8 @@ class Header(Serializable):
         try:
             type = MessageType(header_bytes[CommonMessageOffsets.MESSAGE_TYPE])
         except ValueError as e:
-            _LOGGER.error(f"Unknown message type in header ({hex(header_bytes[CommonMessageOffsets.MESSAGE_TYPE])})", exc_info=e)
+            _LOGGER.error(
+                f"Unknown message type in header ({hex(header_bytes[CommonMessageOffsets.MESSAGE_TYPE])})", exc_info=e)
             type = MessageType.UNSET
         address_src = AddressSource(header_bytes[CommonMessageOffsets.ADDRESS])
         address_msg_type = AddressMsgType(header_bytes[CommonMessageOffsets.ADDRESS+1])
@@ -86,10 +89,12 @@ class Header(Serializable):
         return Header(address_msg_type, type, data_length, True)
 
     def to_bytes(self) -> bytes:
-        return bytes([HEADER_MAGIC, HEADER_MAGIC]) + \
-            (bytes([AddressSource.SELF, self.address_msg_type]) if self._received else bytes([self.address_msg_type, AddressSource.SELF])) + \
-            bytes([MESSAGE_ID, self.type]) + \
-            self.data_length.to_bytes(2, 'big')
+        return bytes(
+            [HEADER_MAGIC, HEADER_MAGIC]) + (
+            bytes([AddressSource.SELF, self.address_msg_type])
+            if self._received else bytes([self.address_msg_type, AddressSource.SELF])) + bytes(
+            [MESSAGE_ID, self.type]) + self.data_length.to_bytes(
+            2, 'big')
 
 
 def prime_message_buffer(header: Header) -> Buffer:

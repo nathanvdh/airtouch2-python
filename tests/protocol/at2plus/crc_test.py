@@ -1,5 +1,5 @@
 import unittest
-from airtouch2.protocol.bits_n_bytes.crc16_modbus import crc16
+from airtouch2.protocol.at2plus.crc16_modbus import crc16
 
 
 class CrcTest(unittest.TestCase):

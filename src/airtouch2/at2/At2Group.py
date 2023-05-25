@@ -5,14 +5,15 @@ from airtouch2.protocol.at2.messages import ResponseMessage
 
 from airtouch2.protocol.at2.messages import ChangeDamper, ToggleGroup
 if TYPE_CHECKING:
-    from airtouch2.at2.AT2Client import AT2Client
+    from airtouch2.at2.At2Client import At2Client
 import logging
 
 
 _LOGGER = logging.getLogger(__name__)
 
-class AT2Group:
-    def __init__(self, client: AT2Client, number: int, response: ResponseMessage):
+
+class At2Group:
+    def __init__(self, client: At2Client, number: int, response: ResponseMessage):
         self._client = client
         self.number = number
         self._callbacks: list[Callable] = []
@@ -52,7 +53,7 @@ class AT2Group:
         return remove_callback
 
     async def inc_dec_damp(self, inc: bool):
-        await self._client.send_command(ChangeDamper(self.number, inc))
+        await self._client.send(ChangeDamper(self.number, inc))
 
     async def set_damp(self, new_damp: int):
         if new_damp < 0 or new_damp > 10:
@@ -69,7 +70,7 @@ class AT2Group:
 
     async def _turn_on_off(self, on: bool):
         if self.on != on:
-            await self._client.send_command(ToggleGroup(self.number))
+            await self._client.send(ToggleGroup(self.number))
 
     async def turn_off(self):
         await self._turn_on_off(False)

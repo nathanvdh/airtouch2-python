@@ -1,11 +1,10 @@
 from typing import Callable
-from airtouch2.at2plus.AT2PlusAircon import At2PlusAircon
-from airtouch2.at2plus.AT2PlusClient import At2PlusClient
 import logging
 import asyncio
 import aioconsole
 
-from airtouch2.protocol.at2plus.enums import AcFanSpeed
+from airtouch2.at2plus.At2PlusAircon import At2PlusAircon
+from airtouch2.at2plus.At2PlusClient import At2PlusClient
 
 logging.basicConfig(filename='airtouch2plus.log', filemode='a', level=logging.DEBUG,
                     format='%(asctime)s %(threadName)s %(levelname)s: %(message)s')
@@ -25,6 +24,9 @@ class AcStatusLogger:
         self.cleanup_callbacks = []
         self.cleanup_callbacks.append(client.add_new_ac_callback(self.new_ac))
 
+    def __del__(self):
+        self.cleanup()
+
     def new_ac(self):
         for ac in self.client.aircons_by_id.values():
             if ac not in self.acs:
@@ -43,38 +45,6 @@ class AcStatusLogger:
             self.cleanup_callbacks.pop()()
 
 
-class Ac0Waiter:
-    client: At2PlusClient
-    cleanup_callbacks: list[Callable]
-    ac0: At2PlusAircon | None
-    found_ac0: asyncio.Event
-
-    def __init__(self, client: At2PlusClient):
-        self.client = client
-        self.cleanup_callbacks = []
-        self.ac0 = None
-        self.found_ac0 = asyncio.Event()
-        self.cleanup_callbacks.append(client.add_new_ac_callback(self.new_ac))
-
-    def new_ac(self):
-        if self.ac0 is None:
-            for ac in self.client.aircons_by_id.values():
-                if ac.status.id == 0:
-                    self.ac0 = ac
-                    self.found_ac0.set()
-
-    def cleanup(self):
-        while len(self.cleanup_callbacks) > 0:
-            self.cleanup_callbacks.pop()()
-
-    async def wait(self):
-        await self.found_ac0.wait()
-        assert self.ac0 is not None
-        await self.ac0.wait_until_ready()
-        # once we've waited for it, we're finished
-        self.cleanup()
-
-
 input_str: str = \
     """
 Enter: 'q' to quit
@@ -88,20 +58,20 @@ Enter: 'q' to quit
 
 async def main():
     addr = await aioconsole.ainput("Enter airtouch2plus IP address: ")
-    client = At2PlusClient(addr, dump=True)
+    client = At2PlusClient(addr)
     if not await client.connect():
-        raise RuntimeError(f"Could not connect to {client._host_ip}:{client._host_port}")
+        raise RuntimeError(f"Could not connect to {client._client._host_ip}:{client._client._host_port}")
 
     # Register callbacks
     status_logger = AcStatusLogger(client)
-    ac0_waiter = Ac0Waiter(client)
 
-    await client.run()
+    client.run()
 
     _LOGGER.debug("Waiting for AC0 to be ready")
-    await ac0_waiter.wait()
-    _LOGGER.debug("AC0 is ready")
+    await client.wait_for_ac()
+    _LOGGER.debug("Found at least 1 AC")
     ac0 = client.aircons_by_id[0]
+    await ac0.wait_until_ready()
     assert ac0.ability is not None
 
     inp = await aioconsole.ainput(input_str)

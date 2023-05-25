@@ -1,9 +1,9 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Callable
-
+from typing import TYPE_CHECKING
 from airtouch2.protocol.at2plus.messages.AcControl import AcControlMessage, AcSettings
+from airtouch2.common.interfaces import Callback
 if TYPE_CHECKING:
-    from airtouch2.at2plus.AT2PlusClient import At2PlusClient
+    from airtouch2.at2plus.At2PlusClient import At2PlusClient
 from asyncio import Event
 from airtouch2.protocol.at2plus.enums import AcFanSpeed, AcSetMode, AcSetPower
 from airtouch2.protocol.at2plus.messages.AcAbilityMessage import AcAbility
@@ -18,18 +18,13 @@ class At2PlusAircon:
 
     While unready, mode and fan speed setter calls cannot be made as the unit's supported modes are unknown.
     """
-    status: AcStatus
-    ability: AcAbility | None
-
-    _ready: Event
-    _client: At2PlusClient
-    _callbacks: list[Callable] = []
 
     def __init__(self, status: AcStatus, client: At2PlusClient):
-        self.status = status
-        self.ability = None
-        self._ready = Event()
-        self._client = client
+        self.status: AcStatus = status
+        self.ability: AcAbility | None = None
+        self._ready: Event = Event()
+        self._client: At2PlusClient = client
+        self._callbacks: list[Callback] = []
 
     async def _set_power(self, power: AcSetPower):
         settings = AcSettings(self.status.id, power, AcSetMode.UNCHANGED, AcFanSpeed.UNCHANGED, None)
@@ -59,7 +54,7 @@ class At2PlusAircon:
     async def wait_until_ready(self) -> None:
         await self._ready.wait()
 
-    def add_callback(self, callback: Callable):
+    def add_callback(self, callback: Callback):
         self._callbacks.append(callback)
 
         def remove_callback() -> None:
