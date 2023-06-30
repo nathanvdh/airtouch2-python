@@ -3,6 +3,7 @@ import asyncio
 import logging
 from itertools import compress
 from typing import TYPE_CHECKING, Callable
+from airtouch2.common.interfaces import Callback
 from airtouch2.protocol.at2.conversions import brand_from_gateway_id, fan_speed_from_val, supported_fan_speeds, val_from_fan_speed
 if TYPE_CHECKING:
     from airtouch2.at2.At2Client import At2Client
@@ -83,7 +84,7 @@ class At2Aircon:
         for callback in self._callbacks:
             callback()
 
-    def add_callback(self, func: Callable) -> Callable:
+    def add_callback(self, func: Callback) -> Callback:
         self._callbacks.append(func)
 
         def remove_callback() -> None:

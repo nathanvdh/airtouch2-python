@@ -54,7 +54,7 @@ class At2PlusAircon:
     async def wait_until_ready(self) -> None:
         await self._ready.wait()
 
-    def add_callback(self, callback: Callback):
+    def add_callback(self, callback: Callback) -> Callback:
         self._callbacks.append(callback)
 
         def remove_callback() -> None:
