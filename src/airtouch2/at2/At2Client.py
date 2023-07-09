@@ -38,7 +38,10 @@ class At2Client:
         self._client.run()
 
     async def wait_for_ac(self, timeout: int = 5) -> None:
-        await asyncio.wait_for(self._found_ac.wait(), timeout)
+        try:
+            await asyncio.wait_for(self._found_ac.wait(), timeout)
+        except TimeoutError:
+            pass
 
     async def stop(self) -> None:
         await self._client.stop()
