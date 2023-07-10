@@ -79,7 +79,7 @@ class At2Client:
         resp = await self._read_response()
         if not resp:
             # something went wrong
-            _LOGGER.warning("Reading message failed")
+            _LOGGER.info("Reading message failed")
             return
 
         # ACs

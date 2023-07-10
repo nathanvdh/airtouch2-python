@@ -116,3 +116,4 @@ class NetClient:
             retries += 1
             if not retries % 60 or retries == 4:
                 _LOGGER.info("Server is not responding, will continue trying to reconnect every 10s")
+        _LOGGER.info("Reconnected")
