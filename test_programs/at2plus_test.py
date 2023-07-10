@@ -3,8 +3,8 @@ import logging
 import asyncio
 import aioconsole
 
-from airtouch2.at2plus.At2PlusAircon import At2PlusAircon
-from airtouch2.at2plus.At2PlusClient import At2PlusClient
+from airtouch2.at2plus import At2PlusAircon
+from airtouch2.at2plus import At2PlusClient
 
 logging.basicConfig(filename='airtouch2plus.log', filemode='a', level=logging.DEBUG,
                     format='%(asctime)s %(threadName)s %(levelname)s: %(message)s')

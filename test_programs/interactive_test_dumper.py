@@ -1,4 +1,4 @@
-from airtouch2 import At2Client
+from airtouch2.at2 import At2Client
 from airtouch2.at2.At2Aircon import At2Aircon
 from airtouch2.protocol.at2.messages.ac_commands import ToggleAc
 import logging
