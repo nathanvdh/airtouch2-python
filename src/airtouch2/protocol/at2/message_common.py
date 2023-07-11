@@ -11,4 +11,4 @@ def checksum(data: bytearray) -> int:
 
 
 def add_checksum_message_buffer(buffer: Buffer) -> None:
-    buffer.append_bytes(checksum(buffer.data[:-1]).to_bytes(1, 'little'))
+    buffer.append_bytes(checksum(buffer._data[:-1]).to_bytes(1, 'little'))

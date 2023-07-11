@@ -120,13 +120,15 @@ class At2PlusClient:
         if not data_bytes:
             # interrupted during data reading
             return None
-        buffer.append_bytes(data_bytes)
+        if not buffer.append_bytes(data_bytes):
+            _LOGGER.warning(
+                f"Received incorrect number of bytes, expected {header.data_length} but received {buffer._head}")
 
         checksum = await self._client.read_bytes(2)
         if not checksum:
             # interrupted during checksum reading
             return None
-        calculated_checksum = crc16(header_bytes[2:] + buffer.data)
+        calculated_checksum = crc16(header_bytes[2:] + buffer._data)
         if (checksum != calculated_checksum):
             _LOGGER.warning(
                 f"Checksum mismatch, ignoring message: Got {checksum.hex(':')}, expected {calculated_checksum.hex(':')}")

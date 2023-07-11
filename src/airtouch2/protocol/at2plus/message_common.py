@@ -104,7 +104,7 @@ def prime_message_buffer(header: Header) -> Buffer:
 
 
 def add_checksum_message_buffer(buffer: Buffer) -> None:
-    buffer.append_bytes(crc16(buffer.data[2:-2]))
+    buffer.append_bytes(crc16(buffer._data[2:-2]))
 
 
 def add_checksum_message_bytes(data: bytearray) -> None:
