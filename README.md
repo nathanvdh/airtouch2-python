@@ -1,5 +1,5 @@
 # airtouch2_python
-In-development Python client for the Polyaire AirTouch 2 airconditioning system
+In-development Python client for the Polyaire AirTouch 2 and 2+ airconditioning systems.
 
 ## Thanks to
 https://github.com/tonymyatt/airtouch3api
