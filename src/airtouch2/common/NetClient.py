@@ -71,6 +71,7 @@ class NetClient:
         else:
             bytes_to_write = message.to_bytes()
             _LOGGER.debug(f"Sending {message.__class__.__name__} with data: {bytes_to_write.hex(':')}")
+            _LOGGER.debug(f"{repr(message)}")
             self._writer.write(bytes_to_write)
             drained: bool = False
             while not drained:
