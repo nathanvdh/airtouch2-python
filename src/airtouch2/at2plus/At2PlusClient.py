@@ -1,6 +1,7 @@
 import asyncio
 from datetime import datetime
 import logging
+
 from airtouch2.at2plus.At2PlusAircon import At2PlusAircon
 from airtouch2.common.NetClient import NetClient
 from airtouch2.protocol.at2plus.control_status_common import ControlStatusSubHeader, ControlStatusSubType
@@ -148,10 +149,7 @@ class At2PlusClient:
     async def _handle_status_message(self, message: AcStatusMessage):
         _LOGGER.debug("Handling status message")
         for status in message.statuses:
-            if status.id in self.aircons_by_id.keys():
-                self.aircons_by_id[status.id]._update_status(status)
-                _LOGGER.debug(f"Updated AC {status.id} with value {status}")
-            else:
+            if status.id not in self.aircons_by_id.keys():
                 _LOGGER.debug(f"New AC ({status.id}) found")
                 self.aircons_by_id[status.id] = At2PlusAircon(status, self)
                 for callback in self._new_ac_callbacks:
@@ -160,6 +158,9 @@ class At2PlusClient:
                 while not ability:
                     ability = await self._request_ac_ability(status.id)
                 self.aircons_by_id[status.id]._set_ability(ability)
+                _LOGGER.debug(f"Set ability of AC{status.id}")
+            self.aircons_by_id[status.id]._update_status(status)
+            _LOGGER.debug(f"Updated AC {status.id} with value {status}")
         _LOGGER.debug("Finished handling status message")
 
     async def _request_ac_ability(self, id: int) -> AcAbility | None:
