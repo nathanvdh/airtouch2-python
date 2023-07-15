@@ -1,9 +1,8 @@
 import asyncio
 from datetime import datetime
-import errno
 import logging
-from airtouch2.common.NetClient import NetClient
 
+from airtouch2.common.NetClient import NetClient
 from airtouch2.protocol.at2.constants import MessageLength
 from airtouch2.protocol.at2.messages import RequestState, ResponseMessage
 from airtouch2.at2.At2Aircon import At2Aircon
@@ -11,9 +10,6 @@ from airtouch2.at2.At2Group import At2Group
 from airtouch2.common.interfaces import Callback, Serializable, TaskCreator
 
 _LOGGER = logging.getLogger(__name__)
-
-NetworkOrHostDownErrors = (errno.EHOSTUNREACH, errno.ECONNREFUSED,  errno.ETIMEDOUT,
-                           errno.ENETDOWN, errno.ENETUNREACH, errno.ENETRESET, errno.ECONNABORTED)
 
 
 class At2Client:
