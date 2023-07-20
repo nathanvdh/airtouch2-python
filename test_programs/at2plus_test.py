@@ -58,7 +58,7 @@ Enter: 'q' to quit
 
 async def main():
     addr = await aioconsole.ainput("Enter airtouch2plus IP address: ")
-    client = At2PlusClient(addr)
+    client = At2PlusClient(addr, dump_responses=True)
     if not await client.connect():
         raise RuntimeError(f"Could not connect to {client._client._host_ip}:{client._client._host_port}")
 

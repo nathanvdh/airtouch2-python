@@ -11,7 +11,6 @@ from airtouch2.common.interfaces import Callback, Serializable, TaskCreator
 
 _LOGGER = logging.getLogger(__name__)
 
-
 class At2Client:
     def __init__(self, host: str, dump_responses: bool = False, task_creator: TaskCreator = asyncio.create_task):
         # public

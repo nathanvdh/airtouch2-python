@@ -57,24 +57,24 @@ class ResponseMessageOffsets(IntEnum):
     SYSTEM_NAME = 324
     # On/Off, isError, 'Auto off' enabled, 'thermistor on AC', program number
     AC1_STATUS = 354
-    #AC2_STATUS = 355
+    AC2_STATUS = 355
     AC1_BRAND = 356
-    #AC2_BRAND = 357
+    AC2_BRAND = 357
     AC1_MODE = 358
-    #AC2_MODE = 359
+    AC2_MODE = 359
     AC1_FAN_SPEED = 360
-    #AC2_FAN_SPEED = 361
+    AC2_FAN_SPEED = 361
     AC1_SET_TEMP = 362
     #AC2_SET_TEMP = 363
     AC1_MEASURED_TEMP = 364
     #AC2_MEASURED_TEMP = 365
     AC1_ERROR_CODE = 366
-    #AC2_ERROR_CODE = 367
+    AC2_ERROR_CODE = 367
     AC1_GATEWAY_ID = 368
-    #AC2_GATEWAY_ID = 369
+    AC2_GATEWAY_ID = 369
     # AC names are 8 bytes (ResponseMessageConstants.SHORT_STRING_LENGTH)
     AC1_NAME_START = 370
-    #AC2_NAME_START = 378
+    AC2_NAME_START = 378
     HASH = 394
 
 OPEN_ISSUE_TEXT = "please open an issue and detail your system:\n\thttps://github.com/nathanvdh/airtouch2-python/issues/new"
