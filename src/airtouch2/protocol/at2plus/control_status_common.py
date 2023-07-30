@@ -2,6 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import IntEnum
 from airtouch2.common.Buffer import Buffer
+import logging
 
 from airtouch2.common.interfaces import Serializable
 
@@ -9,6 +10,7 @@ from airtouch2.common.interfaces import Serializable
 CONTROL_STATUS_SUBHEADER_LENGTH = 8
 SUBDATALENGTH_LENGTH = 6
 
+_LOGGER = logging.getLogger(__name__)
 
 class ControlStatusOffsets(IntEnum):
     # Control/Status messages 'data' consists of:
@@ -68,7 +70,13 @@ class ControlStatusSubHeader(Serializable):
     def from_bytes(subheader_bytes: bytes) -> ControlStatusSubHeader:
         if len(subheader_bytes) != CONTROL_STATUS_SUBHEADER_LENGTH:
             raise ValueError("Unexpected control/status subheader size")
-        subtype = ControlStatusSubType(subheader_bytes[0])
+        try:
+            subtype = ControlStatusSubType(subheader_bytes[0])
+        except ValueError as e:
+            _LOGGER.error(
+                f"Unknown message type in header ({hex(subheader_bytes[0])})", exc_info=e)
+            subtype = ControlStatusSubType.UNSET
+
         data_length = SubDataLength.from_bytes(subheader_bytes[2:8])
         return ControlStatusSubHeader(subtype, data_length)
 

@@ -68,8 +68,12 @@ class At2PlusClient:
                 status_message = AcStatusMessage.from_bytes(
                     message.data_buffer.read_bytes(subheader.subdata_length.total()))
                 self._task_creator(self._handle_status_message(status_message))
+            elif subheader.sub_type == ControlStatusSubType.GROUP_STATUS:
+                # NYI
+                pass
             else:
-                _LOGGER.error(f"Unknown control/status message type: {subheader.sub_type}")
+                _LOGGER.error(
+                    f"Unknown status message type: subtype={subheader.sub_type}, data={message.data_buffer.to_bytes().hex(':')}")
         elif message.header.type == MessageType.EXTENDED:
             subheader = ExtendedSubHeader.from_buffer(message.data_buffer)
             if subheader.sub_type == ExtendedMessageSubType.ABILITY:
@@ -78,7 +82,8 @@ class At2PlusClient:
                 ability = AcAbilityMessage.from_bytes(ability_message_bytes)
                 await self._ability_message_queue.put(ability)
             else:
-                _LOGGER.error(f"Unknown extended message type: {subheader.sub_type}")
+                _LOGGER.error(
+                    f"Unknown extended message type: subtype={subheader.sub_type}, data={message.data_buffer.to_bytes().hex(':')}")
         else:
             _LOGGER.error(
                 f"Unknown message type, header={message.header.to_bytes().hex(':')}, data={message.data_buffer.to_bytes().hex(':')}")
