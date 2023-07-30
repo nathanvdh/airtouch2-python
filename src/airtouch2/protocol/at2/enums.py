@@ -1,5 +1,6 @@
 from enum import IntEnum
 
+
 class ACMode(IntEnum):
     AUTO = 0
     HEAT = 1
@@ -10,7 +11,8 @@ class ACMode(IntEnum):
     def __str__(self):
         return self._name_
 
-class ACFanSpeedReference(IntEnum):
+
+class ACFanSpeed(IntEnum):
     AUTO = 0
     QUIET = 1
     LOW = 2
@@ -22,6 +24,8 @@ class ACFanSpeedReference(IntEnum):
         return self._name_
 
 # From adding AC2 on the panel and cycling through brands
+
+
 class ACBrand(IntEnum):
     NONE = 0
     DAIKIN = 1

@@ -1,6 +1,7 @@
+from airtouch2.protocol.at2.conversions import val_from_fan_speed
 from airtouch2.protocol.at2.message_common import add_checksum_message_buffer
 from airtouch2.protocol.at2.constants import ACCommands, CommandMessageConstants, CommandMessageType, MessageLength
-from airtouch2.protocol.at2.enums import ACMode
+from airtouch2.protocol.at2.enums import ACFanSpeed, ACMode
 from airtouch2.common.Buffer import Buffer
 from airtouch2.common.interfaces import Serializable
 
@@ -34,24 +35,21 @@ class ToggleAc(Serializable):
 
     def to_bytes(self) -> bytes:
         buffer = prime_ac_control_message_buffer(self.target_ac)
-        # buffer.append_bytes(bytes([0]))
         buffer.append_bytes(CommandMessageConstants.TOGGLE.to_bytes(1, 'little'))
         buffer.append_bytes(bytes([0, 0, 0, 0, 0, 0, 0]))
         add_checksum_message_buffer(buffer)
         return buffer.to_bytes()
 
-# needs investigation
-
 
 class SetFanSpeed(Serializable):
-    def __init__(self, target_ac_number: int, fan_speed: int):
+    def __init__(self, target_ac_number: int, supported_fan_speeds: list[ACFanSpeed], fan_speed: ACFanSpeed):
         self.target_ac = target_ac_number
-        self.fan_speed = fan_speed
+        self.fan_speed_val: int = val_from_fan_speed(supported_fan_speeds, fan_speed)
 
     def to_bytes(self) -> bytes:
         buffer = prime_ac_control_message_buffer(self.target_ac)
         buffer.append_bytes(ACCommands.SET_FAN_SPEED.to_bytes(1, 'little'))
-        buffer.append_bytes(self.fan_speed.to_bytes(1, 'little'))
+        buffer.append_bytes(self.fan_speed_val.to_bytes(1, 'little'))
         buffer.append_bytes(bytes([0, 0, 0, 0, 0, 0]))
         add_checksum_message_buffer(buffer)
         return buffer.to_bytes()
