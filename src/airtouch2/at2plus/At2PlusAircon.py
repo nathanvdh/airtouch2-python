@@ -5,7 +5,7 @@ from airtouch2.common.interfaces import Callback
 if TYPE_CHECKING:
     from airtouch2.at2plus.At2PlusClient import At2PlusClient
 from asyncio import Event
-from airtouch2.protocol.at2plus.enums import AcFanSpeed, AcSetMode, AcSetPower
+from airtouch2.protocol.at2plus.enums import AcFanSpeed, AcPower, AcSetMode, AcSetPower
 from airtouch2.protocol.at2plus.messages.AcAbilityMessage import AcAbility
 from airtouch2.protocol.at2plus.messages.AcStatus import AcStatus
 
@@ -33,11 +33,14 @@ class At2PlusAircon:
     async def toggle(self):
         await self._set_power(AcSetPower.TOGGLE)
 
-    async def on(self):
+    async def turn_on(self):
         await self._set_power(AcSetPower.ON)
 
-    async def off(self):
+    async def turn_off(self):
         await self._set_power(AcSetPower.OFF)
+
+    def is_on(self) -> bool:
+        return self.status.power == AcPower.ON
 
     async def set_mode(self, mode: AcSetMode):
         settings = AcSettings(self.status.id, AcSetPower.UNCHANGED, mode, AcFanSpeed.UNCHANGED, None)
