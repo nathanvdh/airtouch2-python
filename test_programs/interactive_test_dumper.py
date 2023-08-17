@@ -1,6 +1,7 @@
 from typing import Callable
 from airtouch2.at2 import At2Client
-from airtouch2.protocol.at2.messages.ac_commands import ToggleAc
+from airtouch2.protocol.at2.enums import ACMode
+from airtouch2.protocol.at2.messages.ac_commands import SetMode, ToggleAc
 import logging
 import asyncio
 import aioconsole
@@ -39,6 +40,19 @@ class PublishersLogger:
                 self.subscribed_publisher_ids.append(id)
 
 
+input_str: str = \
+    f"""
+Enter:  'q' to quit
+        't' to toggle power
+        'm' to set mode
+
+        <command> <ac> [value]
+        e.g. m 0 1 (set mode of AC0 to 1 ({ACMode(1)}))
+             t 1   (toggle AC1)
+        Modes: {ACMode._member_names_}
+"""
+
+
 async def main():
     inp: str = await aioconsole.ainput('Enter IP address: ')
     client = At2Client(inp, dump_responses=True)
@@ -54,12 +68,33 @@ async def main():
         await client.wait_for_ac()
         _LOGGER.debug("AC is ready")
 
-        inp = await aioconsole.ainput('quit (q), toggleAC (t): ')
+        inp = await aioconsole.ainput(input_str)
         while inp != 'q':
-            if inp == 't':
-                _LOGGER.info("Sending toggle")
-                await client.send(ToggleAc(0))
-            inp = await aioconsole.ainput()
+            split = inp.split()
+            while len(split) < 2:
+                print("Enter command followed by ac number followed by optional args")
+                inp = await aioconsole.ainput(input_str)
+
+            cmd = split[0]
+            ac = int(split[1])
+
+            if ac not in [0, 1]:
+                raise ValueError("AC must be 0 or 1")
+
+            if cmd == 't':
+                _LOGGER.info(f"Toggling AC{ac}")
+                await client.send(ToggleAc(ac))
+            elif cmd == 'm':
+                mode = ACMode.AUTO
+                if len(split) > 2:
+                    mode = ACMode(int(split[2]))
+                else:
+                    mode = ACMode(int(await aioconsole.ainput('Enter mode: ')))
+                _LOGGER.info(f"Changing AC{ac} mode to {mode}")
+
+                await client.send(SetMode(ac, ACMode(mode)))
+
+            inp = await aioconsole.ainput(input_str)
 
     await client.stop()
 
