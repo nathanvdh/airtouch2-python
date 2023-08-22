@@ -74,6 +74,7 @@ async def main():
             while len(split) < 2:
                 print("Enter command followed by ac number followed by optional args")
                 inp = await aioconsole.ainput(input_str)
+                split = inp.split()
 
             cmd = split[0]
             ac = int(split[1])
