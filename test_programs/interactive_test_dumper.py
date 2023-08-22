@@ -1,3 +1,4 @@
+from enum import IntEnum
 from typing import Callable
 from airtouch2.at2 import At2Client
 from airtouch2.protocol.at2.enums import ACMode
@@ -45,13 +46,21 @@ input_str: str = \
 Enter:  'q' to quit
         't' to toggle power
         'm' to set mode
+        'c' to set command mode (0 (direct) or  1 (object))
 
-        <command> <ac> [value]
+        <command> <ac> [value] or "c <command mode>"
         e.g. m 0 1 (set mode of AC0 to 1 ({ACMode(1)}))
              t 1   (toggle AC1)
         Modes: {ACMode._member_names_}
 """
 
+
+class CommandMode(IntEnum):
+    DIRECT = 0
+    OBJECT = 1
+
+    def __str__(self):
+        return self._name_
 
 async def main():
     inp: str = await aioconsole.ainput('Enter IP address: ')
@@ -68,34 +77,42 @@ async def main():
         await client.wait_for_ac()
         _LOGGER.debug("AC is ready")
 
+        command_mode: CommandMode = CommandMode.DIRECT
+        inp = ""
         inp = await aioconsole.ainput(input_str)
         while inp != 'q':
             split = inp.split()
-            while len(split) < 2:
-                print("Enter command followed by ac number followed by optional args")
-                inp = await aioconsole.ainput(input_str)
-                split = inp.split()
 
-            cmd = split[0]
-            ac = int(split[1])
-
-            if ac not in [0, 1]:
-                raise ValueError("AC must be 0 or 1")
-
-            if cmd == 't':
-                _LOGGER.info(f"Toggling AC{ac}")
-                await client.send(ToggleAc(ac))
-            elif cmd == 'm':
-                mode = ACMode.AUTO
-                if len(split) > 2:
-                    mode = ACMode(int(split[2]))
+            if len(split) >= 2:
+                cmd = split[0]
+                if cmd == 'c':
+                    command_mode = CommandMode(int(split[1]))
                 else:
-                    mode = ACMode(int(await aioconsole.ainput('Enter mode: ')))
-                _LOGGER.info(f"Changing AC{ac} mode to {mode}")
+                    ac = int(split[1])
+                    if ac not in [0, 1]:
+                        raise ValueError("AC must be 0 or 1")
 
-                await client.send(SetMode(ac, ACMode(mode)))
+                    if cmd == 't':
+                        _LOGGER.info(f"Toggling AC{ac} ({command_mode})")
+                        if command_mode == CommandMode.DIRECT:
+                            await client.send(ToggleAc(ac))
+                        elif command_mode == CommandMode.OBJECT:
+                            await client.aircons_by_id[ac]._turn_on_off(not client.aircons_by_id[ac].info.active)
+                    elif cmd == 'm':
+                        mode = ACMode.AUTO
+                        if len(split) > 2:
+                            mode = ACMode(int(split[2]))
+                        else:
+                            mode = ACMode(int(await aioconsole.ainput('Enter mode: ')))
+                        _LOGGER.info(f"Changing AC{ac} mode to {mode} ({command_mode})")
+
+                        if command_mode == CommandMode.DIRECT:
+                            await client.send(SetMode(ac, ACMode(mode)))
+                        elif command_mode == CommandMode.OBJECT:
+                            await client.aircons_by_id[ac].set_mode(mode)
 
             inp = await aioconsole.ainput(input_str)
+
 
     await client.stop()
 
