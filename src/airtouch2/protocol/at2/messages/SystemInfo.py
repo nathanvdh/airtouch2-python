@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from itertools import compress
-from pprint import pprint
+from pprint import pformat
 
 from airtouch2.protocol.at2.constants import OPEN_ISSUE_TEXT, MessageLength, ResponseMessageConstants, ResponseMessageOffsets
 from airtouch2.protocol.at2.conversions import brand_from_gateway_id, fan_speed_from_val
@@ -266,7 +266,7 @@ class SystemInfo:
     def __str__(self):
         return f"""
         System Name:\t{self.system_name}
-        ACs:\t\t\t{pprint(self.aircons_by_id)}
-        Groups:\t\t{pprint(self.groups_by_id)}
+        ACs:\n{pformat(self.aircons_by_id)}
+        Groups:\n{pformat(self.groups_by_id)}
         Touchpad Temp:\t{self.touchpad_temp}
         """
