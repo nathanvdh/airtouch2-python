@@ -162,7 +162,9 @@ class At2PlusClient:
         return Message(header, buffer)
 
     async def _on_connect(self) -> None:
-        # request AcStatus
+        # request groups
+        await self._client.send(GroupStatusMessage([]))
+        # request ACs
         await self._client.send(AcStatusMessage([]))
 
     async def _handle_status_message(self, message: AcStatusMessage):
