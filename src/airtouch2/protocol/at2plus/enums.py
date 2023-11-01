@@ -85,3 +85,8 @@ class AcFanSpeed(IntEnum):
             return AcFanSpeed(val)
         except ValueError:
             return AcFanSpeed.UNCHANGED
+
+class GroupPower(IntEnum):
+    OFF = 0
+    ON = 1
+    TURBO = 3
