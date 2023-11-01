@@ -1,10 +1,12 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
 
-
-from airtouch2.at2plus.At2PlusClient import At2PlusClient
 from airtouch2.common.interfaces import Callback
 from airtouch2.protocol.at2plus.enums import GroupPower
 from airtouch2.protocol.at2plus.messages.GroupStatus import GroupStatus
 
+if TYPE_CHECKING:
+    from airtouch2.at2plus.At2PlusClient import At2PlusClient
 
 class At2PlusGroup:
     """
@@ -16,7 +18,6 @@ class At2PlusGroup:
         self.status = status
         self._client = client
         self._callbacks: list[Callback] = []
-
 
     def is_on(self) -> bool:
         return self.status.power != GroupPower.OFF
