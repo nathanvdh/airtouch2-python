@@ -43,6 +43,14 @@ class GroupStatus(Serializable):
 
         return GroupStatus(id, power, damp, supports_turbo, spill_active)
 
+    def __repr__(self) -> str:
+        return f"""
+            id: {self.id}
+         power: {self.power}
+        damper: {self.damp}%
+supports_turbo: {self.supports_turbo}
+  spill_active: {self.spill_active}"""
+
 
 class GroupStatusMessage(Serializable):
     """GroupStatus message (can be response with repeat subdata or request with empty subdata)"""

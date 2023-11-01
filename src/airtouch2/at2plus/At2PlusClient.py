@@ -3,6 +3,7 @@ from datetime import datetime
 import logging
 
 from airtouch2.at2plus.At2PlusAircon import At2PlusAircon
+from airtouch2.at2plus.At2PlusGroup import At2PlusGroup
 from airtouch2.common.NetClient import NetClient
 from airtouch2.protocol.at2plus.control_status_common import ControlStatusSubHeader, ControlStatusSubType
 from airtouch2.protocol.at2plus.extended_common import ExtendedMessageSubType, ExtendedSubHeader
@@ -12,6 +13,7 @@ from airtouch2.protocol.at2plus.messages.AcStatus import AcStatusMessage
 from airtouch2.common.Buffer import Buffer
 from airtouch2.protocol.at2plus.crc16_modbus import crc16
 from airtouch2.common.interfaces import Callback, Serializable, TaskCreator
+from airtouch2.protocol.at2plus.messages.GroupStatus import GroupStatusMessage
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -20,6 +22,7 @@ class At2PlusClient:
     def __init__(self, host: str, dump_responses: bool = False, task_creator: TaskCreator = asyncio.create_task):
         # public
         self.aircons_by_id: dict[int, At2PlusAircon] = {}
+        self.groups_by_id: dict[int, At2PlusGroup] = {}
 
         # private
         self._client = NetClient(host, 9200, self._on_connect, self.handle_one_message, task_creator)
@@ -28,6 +31,7 @@ class At2PlusClient:
         self._new_ac_callbacks: list[Callback] = []
         self._ability_message_queue: asyncio.Queue[AcAbilityMessage] = asyncio.Queue()
         self._found_ac = asyncio.Event()
+        self._new_group_callbacks: list[Callback] = []
 
         self.add_new_ac_callback(lambda: self._found_ac.set())
 
@@ -52,6 +56,15 @@ class At2PlusClient:
 
         return remove_callback
 
+    def add_new_group_callback(self, callback: Callback):
+        self._new_group_callbacks.append(callback)
+
+        def remove_callback() -> None:
+            if callback in self._new_group_callbacks:
+                self._new_group_callbacks.remove(callback)
+
+        return remove_callback
+
     async def send(self, msg: Serializable):
         await self._client.send(msg)
 
@@ -69,8 +82,9 @@ class At2PlusClient:
                     message.data_buffer.read_bytes(subheader.subdata_length.total()))
                 self._task_creator(self._handle_status_message(status_message))
             elif subheader.sub_type == ControlStatusSubType.GROUP_STATUS:
-                # NYI
-                pass
+                group_status_message = GroupStatusMessage.from_bytes(
+                    message.data_buffer.read_bytes(subheader.subdata_length.total()))
+                self._task_creator(self._handle_group_status_message(group_status_message))
             else:
                 _LOGGER.error(
                     f"Unknown status message type: subtype={subheader.sub_type}, data={message.data_buffer.to_bytes().hex(':')}")
@@ -182,3 +196,15 @@ class At2PlusClient:
             return None
         _LOGGER.debug(f"Got ability of AC{id}: {ac_ability.abilities[0]}")
         return ac_ability.abilities[0]
+
+    async def _handle_group_status_message(self, message: GroupStatusMessage):
+        _LOGGER.debug("Handling group status message")
+        for status in message.statuses:
+            if status.id not in self.groups_by_id.keys():
+                _LOGGER.debug(f"New group ({status.id}) found")
+                self.groups_by_id[status.id] = At2PlusGroup(status, self)
+                for callback in self._new_group_callbacks:
+                    callback()
+            self.groups_by_id[status.id]._update_status(status)
+            _LOGGER.debug(f"Updated group {status.id} with value {status}")
+        _LOGGER.debug("Finished handling status message")

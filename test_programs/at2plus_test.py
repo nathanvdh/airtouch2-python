@@ -3,8 +3,7 @@ import logging
 import asyncio
 import aioconsole
 
-from airtouch2.at2plus import At2PlusAircon
-from airtouch2.at2plus import At2PlusClient
+from airtouch2.at2plus import At2PlusClient, At2PlusAircon, At2PlusGroup
 
 logging.basicConfig(filename='airtouch2plus.log', filemode='a', level=logging.DEBUG,
                     format='%(asctime)s %(threadName)s %(levelname)s: %(message)s')
@@ -16,13 +15,16 @@ logging.getLogger('asyncio').setLevel(logging.WARNING)
 class AcStatusLogger:
     client: At2PlusClient
     acs: list[At2PlusAircon]
+    groups: list[At2PlusGroup]
     cleanup_callbacks: list[Callable]
 
     def __init__(self, client: At2PlusClient):
         self.client = client
         self.acs = []
+        self.groups = []
         self.cleanup_callbacks = []
         self.cleanup_callbacks.append(client.add_new_ac_callback(self.new_ac))
+        self.cleanup_callbacks.append(client.add_new_group_callback(self.new_group))
 
     def __del__(self):
         self.cleanup()
@@ -39,6 +41,14 @@ class AcStatusLogger:
                         _LOGGER.info(ac.ability)
 
                 self.cleanup_callbacks.append(ac.add_callback(log_ac_info))
+
+    def new_group(self):
+        for group in self.client.groups_by_id.values():
+            if group not in self.groups:
+                self.groups.append(group)
+                _LOGGER.info(group.status)
+
+                self.cleanup_callbacks.append(group.add_callback(lambda: _LOGGER.info(group.status)))
 
     def cleanup(self):
         while len(self.cleanup_callbacks) > 0:
