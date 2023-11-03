@@ -20,7 +20,7 @@ class GroupSettings(Serializable):
 
     def __init__(self, group_id: int, damp_mode: GroupSetDamper, power: GroupSetPower, damp: int | None = None):
         if damp is not None:
-            if not 0 <= damp < 100:
+            if not 0 <= damp <= 100:
                 raise ValueError(f"Damper percentage must be from 0 to 100")
         if not 0 <= group_id < Limits.MAX_GROUPS:
             raise ValueError(f'Group ID must be from 0 to {Limits.MAX_GROUPS-1}')
