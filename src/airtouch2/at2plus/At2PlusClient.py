@@ -13,6 +13,7 @@ from airtouch2.protocol.at2plus.messages.AcStatus import AcStatusMessage
 from airtouch2.common.Buffer import Buffer
 from airtouch2.protocol.at2plus.crc16_modbus import crc16
 from airtouch2.common.interfaces import Callback, Serializable, TaskCreator
+from airtouch2.protocol.at2plus.messages.GroupNames import RequestGroupNamesMessage, group_names_from_subdata
 from airtouch2.protocol.at2plus.messages.GroupStatus import GroupStatusMessage
 
 _LOGGER = logging.getLogger(__name__)
@@ -95,6 +96,13 @@ class At2PlusClient:
                 _LOGGER.debug(f"Creating ability message from {len(ability_message_bytes)} bytes")
                 ability = AcAbilityMessage.from_bytes(ability_message_bytes)
                 await self._ability_message_queue.put(ability)
+            elif subheader.sub_type == ExtendedMessageSubType.GROUP_NAME:
+                group_names_subdata = message.data_buffer.read_remaining()
+                for id, name in group_names_from_subdata(group_names_subdata).items():
+                    self.groups_by_id[id]._update_name(name)
+            elif subheader.sub_type == ExtendedMessageSubType.ERROR:
+                # NYI
+                pass
             else:
                 _LOGGER.warning(
                     f"Unknown extended message type: subtype={subheader.sub_type}, data={message.data_buffer.to_bytes().hex(':')}")
@@ -201,6 +209,9 @@ class At2PlusClient:
 
     async def _handle_group_status_message(self, message: GroupStatusMessage):
         _LOGGER.debug("Handling group status message")
+        request_names: bool = False
+        if not len(self.groups_by_id):
+            request_names = True
         for status in message.statuses:
             if status.id not in self.groups_by_id.keys():
                 _LOGGER.debug(f"New group ({status.id}) found")
@@ -210,3 +221,6 @@ class At2PlusClient:
             self.groups_by_id[status.id]._update_status(status)
             _LOGGER.debug(f"Updated group {status.id} with value {status}")
         _LOGGER.debug("Finished handling group status message")
+        if request_names:
+            _LOGGER.debug("Requesting all group names")
+            await self._client.send(RequestGroupNamesMessage())

@@ -18,6 +18,7 @@ class At2PlusGroup:
 
     def __init__(self, status: GroupStatus, client: At2PlusClient):
         self.status = status
+        self.name: str | None = None
         self._client = client
         self._callbacks: list[Callback] = []
 
@@ -56,5 +57,12 @@ class At2PlusGroup:
         for callback in self._callbacks:
             callback()
 
+    def _update_name(self, name: str):
+        self.name = name
+        for callback in self._callbacks:
+            callback()
+
     def __repr__(self):
-        return str(self.status)
+        return str(self.status) + f"""
+          name: {self.name if self.name is not None else f"Group {self.status.id}"}
+"""
