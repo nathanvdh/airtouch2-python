@@ -90,3 +90,30 @@ class GroupPower(IntEnum):
     OFF = 0
     ON = 1
     TURBO = 3
+
+class GroupSetDamper(IntEnum):
+    UNCHANGED = 0
+    INC = 2
+    DEC = 3
+    SET = 4
+
+    @staticmethod
+    def from_int(val: int) -> GroupSetDamper:
+        try:
+            return GroupSetDamper(val)
+        except ValueError:
+            return GroupSetDamper.UNCHANGED
+
+class GroupSetPower(IntEnum):
+    UNCHANGED = 0
+    NEXT = 1
+    OFF = 2
+    ON = 3
+    TURBO = 5
+
+    @staticmethod
+    def from_int(val: int) -> GroupSetPower:
+        try:
+            return GroupSetPower(val)
+        except ValueError:
+            return GroupSetPower.UNCHANGED
