@@ -73,7 +73,7 @@ class ControlStatusSubHeader(Serializable):
         try:
             subtype = ControlStatusSubType(subheader_bytes[0])
         except ValueError as e:
-            _LOGGER.error(
+            _LOGGER.warning(
                 f"Unknown message type in header ({hex(subheader_bytes[0])})", exc_info=e)
             subtype = ControlStatusSubType.UNSET
 

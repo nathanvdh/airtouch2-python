@@ -86,7 +86,7 @@ class At2PlusClient:
                     message.data_buffer.read_bytes(subheader.subdata_length.total()))
                 self._task_creator(self._handle_group_status_message(group_status_message))
             else:
-                _LOGGER.error(
+                _LOGGER.warning(
                     f"Unknown status message type: subtype={subheader.sub_type}, data={message.data_buffer.to_bytes().hex(':')}")
         elif message.header.type == MessageType.EXTENDED:
             subheader = ExtendedSubHeader.from_buffer(message.data_buffer)
@@ -96,10 +96,10 @@ class At2PlusClient:
                 ability = AcAbilityMessage.from_bytes(ability_message_bytes)
                 await self._ability_message_queue.put(ability)
             else:
-                _LOGGER.error(
+                _LOGGER.warning(
                     f"Unknown extended message type: subtype={subheader.sub_type}, data={message.data_buffer.to_bytes().hex(':')}")
         else:
-            _LOGGER.error(
+            _LOGGER.warning(
                 f"Unknown message type, header={message.header.to_bytes().hex(':')}, data={message.data_buffer.to_bytes().hex(':')}")
 
     async def _read_magic(self) -> bytes:
@@ -168,7 +168,7 @@ class At2PlusClient:
         await self._client.send(AcStatusMessage([]))
 
     async def _handle_status_message(self, message: AcStatusMessage):
-        _LOGGER.debug("Handling status message")
+        _LOGGER.debug("Handling AC status message")
         for status in message.statuses:
             if status.id not in self.aircons_by_id.keys():
                 _LOGGER.debug(f"New AC ({status.id}) found")
@@ -182,7 +182,7 @@ class At2PlusClient:
                 _LOGGER.debug(f"Set ability of AC{status.id}")
             self.aircons_by_id[status.id]._update_status(status)
             _LOGGER.debug(f"Updated AC {status.id} with value {status}")
-        _LOGGER.debug("Finished handling status message")
+        _LOGGER.debug("Finished handling AC status message")
 
     async def _request_ac_ability(self, id: int) -> AcAbility | None:
         _LOGGER.debug(f"Requesting ability of AC{id}")
@@ -209,4 +209,4 @@ class At2PlusClient:
                     callback()
             self.groups_by_id[status.id]._update_status(status)
             _LOGGER.debug(f"Updated group {status.id} with value {status}")
-        _LOGGER.debug("Finished handling status message")
+        _LOGGER.debug("Finished handling group status message")

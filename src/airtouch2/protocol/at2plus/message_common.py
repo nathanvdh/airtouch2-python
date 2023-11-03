@@ -72,7 +72,7 @@ class Header(Serializable):
         try:
             type = MessageType(header_bytes[CommonMessageOffsets.MESSAGE_TYPE])
         except ValueError as e:
-            _LOGGER.error(
+            _LOGGER.warning(
                 f"Unknown message type in header ({hex(header_bytes[CommonMessageOffsets.MESSAGE_TYPE])})", exc_info=e)
             type = MessageType.UNSET
         address_src = AddressSource(header_bytes[CommonMessageOffsets.ADDRESS])
