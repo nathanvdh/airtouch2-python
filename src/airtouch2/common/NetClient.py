@@ -78,7 +78,7 @@ class NetClient:
                 try:
                     await self._writer.drain()
                     drained = True
-                except (ConnectionResetError, asyncio.IncompleteReadError) as e:
+                except (ConnectionResetError, asyncio.IncompleteReadError, TimeoutError) as e:
                     await self._try_reconnect()
 
     async def read_bytes(self, size: int) -> bytes | None:
@@ -93,7 +93,7 @@ class NetClient:
         except asyncio.IncompleteReadError as e:
             _LOGGER.debug(f"IncompleteReadError - partial bytes: {e.partial.hex(':')}")
             data = None
-        except ConnectionResetError as e:
+        except (ConnectionResetError, TimeoutError) as e:
             _LOGGER.debug(f"ConnectionResetError")
             data = None
 
