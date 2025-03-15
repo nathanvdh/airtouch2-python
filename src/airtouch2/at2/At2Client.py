@@ -16,11 +16,13 @@ class At2Client:
     aircons_by_id: dict[int, At2Aircon]
     groups_by_id: dict[int, At2Group]
     system_name: str
+    touchpad_temp: int
 
     def __init__(self, host: str, dump_responses: bool = False, task_creator: TaskCreator = asyncio.create_task):
         self.aircons_by_id = {}
         self.groups_by_id = {}
         self.system_name: str = "UNKNOWN"
+        self.touchpad_temp: int = 0
 
         self._client = NetClient(host, 8899, self._on_connect, self._handle_one_message, task_creator)
         self._dump_responses: bool = dump_responses
@@ -87,6 +89,11 @@ class At2Client:
             return
 
         _LOGGER.debug(f"SystemInfo: {system_info}")
+        
+        # System-wide
+        self.system_name = system_info.system_name
+        self.touchpad_temp = system_info.touchpad_temp
+        
         # ACs
         for id, ac_info in system_info.aircons_by_id.items():
             if id not in self.aircons_by_id:
