@@ -5,7 +5,7 @@ import logging
 from airtouch2.at2plus.At2PlusAircon import At2PlusAircon
 from airtouch2.at2plus.At2PlusGroup import At2PlusGroup
 from airtouch2.common.NetClient import NetClient
-from airtouch2.protocol.at2plus.control_status_common import ControlStatusSubHeader, ControlStatusSubType
+from airtouch2.protocol.at2plus.control_status_common import ControlStatusSubHeader, ControlStatusSubType, need_ack
 from airtouch2.protocol.at2plus.extended_common import ExtendedMessageSubType, ExtendedSubHeader
 from airtouch2.protocol.at2plus.message_common import HEADER_LENGTH, HEADER_MAGIC, Header, Message, MessageType
 from airtouch2.protocol.at2plus.messages.AcAbilityMessage import AcAbility, AcAbilityMessage, RequestAcAbilityMessage
@@ -13,6 +13,7 @@ from airtouch2.protocol.at2plus.messages.AcStatus import AcStatusMessage
 from airtouch2.common.Buffer import Buffer
 from airtouch2.protocol.at2plus.crc16_modbus import crc16
 from airtouch2.common.interfaces import Callback, Serializable, TaskCreator
+from airtouch2.protocol.at2plus.messages.Ack import Ack
 from airtouch2.protocol.at2plus.messages.GroupNames import RequestGroupNamesMessage, group_names_from_subdata
 from airtouch2.protocol.at2plus.messages.GroupStatus import GroupStatusMessage
 
@@ -86,9 +87,20 @@ class At2PlusClient:
                 group_status_message = GroupStatusMessage.from_bytes(
                     message.data_buffer.read_bytes(subheader.subdata_length.total()))
                 self._task_creator(self._handle_group_status_message(group_status_message))
+            # Currently unhandled
+            elif subheader.sub_type == ControlStatusSubType.AC_STATUS2:
+                pass
+            elif subheader.sub_type == ControlStatusSubType.SYSTEM_STATUS:
+                pass
+            elif subheader.sub_type == ControlStatusSubType.ZONE_STATUS:
+                pass
+            elif subheader.sub_type == ControlStatusSubType.SYSTEM_ID:
+                pass
             else:
                 _LOGGER.warning(
                     f"Unknown status message type: subtype={subheader.sub_type}, data={message.data_buffer.to_bytes().hex(':')}")
+            if subheader.sub_type in need_ack:
+                self._task_creator(self.send(Ack(subheader.sub_type)))
         elif message.header.type == MessageType.EXTENDED:
             subheader = ExtendedSubHeader.from_buffer(message.data_buffer)
             if subheader.sub_type == ExtendedMessageSubType.ABILITY:
