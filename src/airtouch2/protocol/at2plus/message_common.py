@@ -48,6 +48,7 @@ class MessageType(IntEnum):
     UNSET = 0
     CONTROL_STATUS = 0xC0
     EXTENDED = 0x1F
+    UNKNOWN_27 = 0x27  # Unknown message type 39 decimal
 
 
 class Header(Serializable):
@@ -56,7 +57,13 @@ class Header(Serializable):
     data_length: int
     _received: bool
 
-    def __init__(self, address_msg_type: AddressMsgType, type: MessageType, data_length: int, _received=False):
+    def __init__(
+        self,
+        address_msg_type: AddressMsgType,
+        type: MessageType,
+        data_length: int,
+        _received=False,
+    ):
         self.address_msg_type = address_msg_type
         self.type = type
         self.data_length = data_length
@@ -66,35 +73,51 @@ class Header(Serializable):
     def from_bytes(header_bytes: bytes) -> Header:
         if len(header_bytes) != HEADER_LENGTH:
             raise ValueError("Unexpected header size")
-        for b in header_bytes[CommonMessageOffsets.HEADER:CommonMessageOffsets.ADDRESS]:
-            if (b != HEADER_MAGIC):
+        for b in header_bytes[
+            CommonMessageOffsets.HEADER : CommonMessageOffsets.ADDRESS
+        ]:
+            if b != HEADER_MAGIC:
                 raise ValueError("Message header magic is invalid")
         try:
             type = MessageType(header_bytes[CommonMessageOffsets.MESSAGE_TYPE])
         except ValueError as e:
             _LOGGER.warning(
-                f"Unknown message type in header ({hex(header_bytes[CommonMessageOffsets.MESSAGE_TYPE])})", exc_info=e)
+                f"Unknown message type in header ({hex(header_bytes[CommonMessageOffsets.MESSAGE_TYPE])})",
+                exc_info=e,
+            )
             type = MessageType.UNSET
         address_src = AddressSource(header_bytes[CommonMessageOffsets.ADDRESS])
-        address_msg_type = AddressMsgType(header_bytes[CommonMessageOffsets.ADDRESS+1])
+        address_msg_type = AddressMsgType(
+            header_bytes[CommonMessageOffsets.ADDRESS + 1]
+        )
         if type == MessageType.CONTROL_STATUS:
-            if (address_msg_type != AddressMsgType.NORMAL):
-                raise ValueError(f"Message address value is invalid: {header_bytes.hex(':')}")
+            if address_msg_type != AddressMsgType.NORMAL:
+                raise ValueError(
+                    f"Message address value is invalid: {header_bytes.hex(':')}"
+                )
         elif type == MessageType.EXTENDED:
-            if (address_msg_type != AddressMsgType.EXTENDED):
-                raise ValueError(f"Message address value is invalid: {header_bytes.hex(':')}")
+            if address_msg_type != AddressMsgType.EXTENDED:
+                raise ValueError(
+                    f"Message address value is invalid: {header_bytes.hex(':')}"
+                )
         id = header_bytes[CommonMessageOffsets.MESAGE_ID]
         data_length = int.from_bytes(
-            header_bytes[CommonMessageOffsets.DATA_LENGTH:CommonMessageOffsets.DATA], 'big')
+            header_bytes[CommonMessageOffsets.DATA_LENGTH : CommonMessageOffsets.DATA],
+            "big",
+        )
         return Header(address_msg_type, type, data_length, True)
 
     def to_bytes(self) -> bytes:
-        return bytes(
-            [HEADER_MAGIC, HEADER_MAGIC]) + (
-            bytes([AddressSource.SELF, self.address_msg_type])
-            if self._received else bytes([self.address_msg_type, AddressSource.SELF])) + bytes(
-            [MESSAGE_ID, self.type]) + self.data_length.to_bytes(
-            2, 'big')
+        return (
+            bytes([HEADER_MAGIC, HEADER_MAGIC])
+            + (
+                bytes([AddressSource.SELF, self.address_msg_type])
+                if self._received
+                else bytes([self.address_msg_type, AddressSource.SELF])
+            )
+            + bytes([MESSAGE_ID, self.type])
+            + self.data_length.to_bytes(2, "big")
+        )
 
 
 def prime_message_buffer(header: Header) -> Buffer:
@@ -104,11 +127,13 @@ def prime_message_buffer(header: Header) -> Buffer:
 
 
 def add_checksum_message_buffer(buffer: Buffer) -> None:
-    buffer.append_bytes(crc16(buffer._data[2:-2]))
+    # Checksum is calculated from the address field to the end of the data
+    buffer.append_bytes(crc16(buffer.get_data_from_offset(CommonMessageOffsets.ADDRESS)))
 
 
 def add_checksum_message_bytes(data: bytearray) -> None:
-    checksum = crc16(data[2:-2])
+    # Checksum is calculated from the address field to the end of the data, excluding the checksum bytes
+    checksum = crc16(data[CommonMessageOffsets.ADDRESS:-2])
     data[-2] = checksum[0]
     data[-1] = checksum[1]
 
@@ -117,3 +142,10 @@ def add_checksum_message_bytes(data: bytearray) -> None:
 class Message:
     header: Header
     data_buffer: Buffer
+
+    def to_bytes(self) -> bytes:
+        """Serializes the message to bytes, including header, data, and checksum."""
+        buffer = prime_message_buffer(self.header)
+        buffer.append_bytes(self.data_buffer.to_bytes())
+        add_checksum_message_buffer(buffer)
+        return buffer.to_bytes()

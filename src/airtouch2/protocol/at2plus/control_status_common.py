@@ -35,6 +35,11 @@ class ControlStatusSubType(IntEnum):
     GROUP_STATUS = 0x21
     AC_CONTROL = 0x22
     AC_STATUS = 0x23
+    AC_STATUS_EXTENDED = 0x10      # Custom AC status format
+    FAVORITE_STATUS = 0x31         # Favorite names and active status  
+    EXTENDED_STATUS = 0x2B         # Extended system status
+    ZONE_STATUS = 0x40             # Zone control status
+    UNKNOWN_45 = 0x45  # Seems to simply broadcast "Polyaire Atch2PM" which could stand for "AirTouch 2 Plus Module".
 
 
 @dataclass
