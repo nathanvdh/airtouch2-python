@@ -28,13 +28,16 @@ def _set_keepalive_options(
             1000 * (idle_seconds + (interval_seconds * count)),
         )
 
+def _format_exception(e: Exception):
+    return f"{type(e).__name__}: {e}"
+
 def _log_completed_task_exception(task: asyncio.Task[None]) -> None:
     try:
         _ = task.result()
     except asyncio.CancelledError:
         pass
     except Exception as e:
-        _LOGGER.error(f"{task.get_name()} completed with an exception:\n{type(e).__name__}: {e}")
+        _LOGGER.error(f"{task.get_name()} completed with an exception:\n{_format_exception(e)}")
 
 class NetClient:
     """A generic network client"""
@@ -113,7 +116,8 @@ class NetClient:
                 try:
                     await self._writer.drain()
                     drained = True
-                except (ConnectionResetError, asyncio.IncompleteReadError, TimeoutError) as e:
+                except (asyncio.IncompleteReadError, ConnectionError, OSError) as e:
+                    _LOGGER.debug(_format_exception(e))
                     await self._try_reconnect()
 
     async def read_bytes(self, size: int) -> bytes | None:
@@ -126,10 +130,10 @@ class NetClient:
         try:
             data = await self._reader.readexactly(size)
         except asyncio.IncompleteReadError as e:
-            _LOGGER.debug(f"IncompleteReadError - partial bytes: {e.partial.hex(':')}")
+            _LOGGER.debug(f"{_format_exception(e)} - partial bytes: {e.partial.hex(':')}")
             data = None
-        except (ConnectionResetError, TimeoutError) as e:
-            _LOGGER.debug("ConnectionResetError")
+        except (ConnectionError, OSError) as e:
+            _LOGGER.debug(f"{_format_exception(e)}")
             data = None
 
         if data is None:
