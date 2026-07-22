@@ -73,6 +73,7 @@ class NetClient:
     def run(self) -> None:
         """Starts the processing of incoming information from the server"""
         _LOGGER.debug("Starting listener task")
+        self._stop = False
         self._main_loop_task = self._task_creator(self._main())
 
     async def stop(self) -> None:
