@@ -101,7 +101,9 @@ class NetClient:
                 try:
                     await self._writer.drain()
                     drained = True
-                except (ConnectionResetError, asyncio.IncompleteReadError, TimeoutError) as e:
+                except (asyncio.IncompleteReadError, OSError) as e:
+                    # OSError covers reset / timeout / host-unreachable — any
+                    # of them means the socket is dead; reconnect and retry.
                     await self._try_reconnect()
 
     async def read_bytes(self, size: int) -> bytes | None:
@@ -116,8 +118,14 @@ class NetClient:
         except asyncio.IncompleteReadError as e:
             _LOGGER.debug(f"IncompleteReadError - partial bytes: {e.partial.hex(':')}")
             data = None
-        except (ConnectionResetError, TimeoutError) as e:
-            _LOGGER.debug("ConnectionResetError")
+        except OSError as e:
+            # Any socket-level failure means the connection is gone: reset,
+            # timeout, or host-unreachable (the controller dropping off WiFi
+            # mid-connection raises [Errno 113], which is NOT a
+            # ConnectionResetError). An uncaught error here kills the read
+            # loop and leaves the client permanently dead until restart, so
+            # treat every OSError as a lost connection and reconnect.
+            _LOGGER.debug(f"Socket error while reading: {e!r}")
             data = None
 
         if data is None:

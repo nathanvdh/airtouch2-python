@@ -36,6 +36,19 @@ class ControlStatusSubType(IntEnum):
     AC_CONTROL = 0x22
     AC_STATUS = 0x23
 
+    AC_STATUS2 = 0x10
+    SYSTEM_STATUS = 0x2B
+    ZONE_STATUS = 0x40
+    SYSTEM_ID = 0x45
+
+
+need_ack: list[ControlStatusSubType] = [
+    ControlStatusSubType.AC_STATUS2,
+    ControlStatusSubType.SYSTEM_STATUS,
+    ControlStatusSubType.ZONE_STATUS,
+    ControlStatusSubType.SYSTEM_ID,
+]
+
 
 @dataclass
 class SubDataLength(Serializable):
