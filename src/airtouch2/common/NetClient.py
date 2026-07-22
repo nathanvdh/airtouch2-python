@@ -2,6 +2,7 @@ import asyncio
 import errno
 import logging
 import socket
+from traceback import format_exception
 from typing import Callable
 from airtouch2.common.interfaces import CoroCallback, Serializable, TaskCreator
 
@@ -26,6 +27,17 @@ def _set_keepalive_options(
             socket.IPPROTO_TCP,
             socket.TCP_USER_TIMEOUT,
             1000 * (idle_seconds + (interval_seconds * count)),
+        )
+
+def _log_completed_task_exception(task: asyncio.Task[None]) -> None:
+    if task.cancelled():
+        return
+
+    exc = task.exception()
+    if exc is not None:
+        _LOGGER.error(
+            f"{task.get_name()} completed with an exception:\n"
+            f"{''.join(format_exception(exc))}"
         )
 
 class NetClient:
@@ -75,6 +87,11 @@ class NetClient:
         _LOGGER.debug("Starting listener task")
         self._stop=False
         self._main_loop_task = self._task_creator(self._main())
+        # This task typically has no awaiter but it's possible it completes
+        # with an exception, so add a done callback that logs exceptions.
+        assert self._main_loop_task is not None
+        self._main_loop_task.set_name("Main loop task")
+        self._main_loop_task.add_done_callback(_log_completed_task_exception)
 
     async def stop(self) -> None:
         """Stops the processing of incoming information from the server"""
