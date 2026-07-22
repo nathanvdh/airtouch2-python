@@ -78,15 +78,14 @@ class NetClient:
 
     async def stop(self) -> None:
         """Stops the processing of incoming information from the server"""
-        if not self._main_loop_task:
-            raise RuntimeError("Client task is not running")
         self._stop = True
-        self._main_loop_task.cancel()
-        try:
-            await self._main_loop_task
-        except asyncio.CancelledError as e:
-            # Eat the expected exception
-            pass
+        if self._main_loop_task is not None:
+            self._main_loop_task.cancel()
+            try:
+                await self._main_loop_task
+            except asyncio.CancelledError:
+                # Eat the expected exception
+                pass
 
     async def send(self, message: Serializable) -> None:
         """Send the serializable 'message'"""
