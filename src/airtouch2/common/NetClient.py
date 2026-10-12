@@ -13,9 +13,9 @@ NetworkOrHostDownErrors = (errno.EHOSTUNREACH, errno.ECONNREFUSED,  errno.ETIMED
 def _set_keepalive_options(
     sock: socket.socket, idle_seconds: int, interval_seconds: int, count: int
 ):
-    if hasattr(sock, "SO_KEEPALIVE"):
+    if hasattr(socket, "SO_KEEPALIVE"):
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-    if hasattr(sock, "TCP_KEEPIDLE"):
+    if hasattr(socket, "TCP_KEEPIDLE"):
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, idle_seconds)
     if hasattr(socket, "TCP_KEEPINTVL"):
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, interval_seconds)
