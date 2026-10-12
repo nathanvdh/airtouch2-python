@@ -11,6 +11,9 @@ from airtouch2.common.interfaces import add_callback, Callback, Serializable, Ta
 
 _LOGGER = logging.getLogger(__name__)
 
+# Every response message starts with these two bytes (re_response/airtouch2_protocol.pdf)
+RESPONSE_HEADER = b"\x91\xfa"
+
 
 class At2Client:
     aircons_by_id: dict[int, At2Aircon]
@@ -67,19 +70,50 @@ class At2Client:
     async def _on_connect(self):
         await self._client.send(RequestState())
 
+    async def _read_header(self) -> bool:
+        """Read up to and including the next response header.
+
+        Skips any bytes before it, so a stream that is out of step (one byte
+        lost or extra) gets back in step. Returns False if the connection was lost.
+        """
+        skipped = 0
+        previous: int | None = None
+        while True:
+            byte = await self._client.read_bytes(1)
+            if not byte:
+                return False
+            if previous == RESPONSE_HEADER[0] and byte[0] == RESPONSE_HEADER[1]:
+                break
+            if previous is not None:
+                skipped += 1
+            previous = byte[0]
+        if skipped:
+            _LOGGER.warning(f"Skipped {skipped} bytes to find the start of the next response")
+        return True
+
     async def _read_response(self) -> SystemInfo | None:
         _LOGGER.debug("Waiting for response")
-        resp = await self._client.read_bytes(MessageLength.RESPONSE)
-        _LOGGER.debug("Got response")
-        if not resp:
+        if not await self._read_header():
             return None
+        rest = await self._client.read_bytes(MessageLength.RESPONSE - len(RESPONSE_HEADER))
+        _LOGGER.debug("Got response")
+        if not rest:
+            return None
+        resp = RESPONSE_HEADER + rest
+        if sum(resp[:-1]) % 256 != resp[-1]:
+            _LOGGER.debug("Response checksum does not match")
 
         if self._dump_responses:
             # blocks but is only used for dev and debugging
             with open('response_' + datetime.now().strftime("%m-%d-%Y_%H-%M-%S") + '.dump', 'wb') as f:
                 f.write(resp)
 
-        return SystemInfo.from_bytes(resp)
+        try:
+            return SystemInfo.from_bytes(resp)
+        except Exception as e:
+            # One unreadable message must not stop the listener task
+            _LOGGER.warning(f"Could not parse response, skipping it: {e!r} (first bytes {resp[:8].hex(':')})")
+            return None
 
     async def _handle_one_message(self) -> None:
         system_info = await self._read_response()
