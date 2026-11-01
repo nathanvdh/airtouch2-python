@@ -3,7 +3,7 @@ from datetime import datetime
 import logging
 
 from airtouch2.common.NetClient import NetClient
-from airtouch2.protocol.at2.constants import MessageLength
+from airtouch2.protocol.at2.constants import MessageLength, RESPONSE_HEADER_MAGIC
 from airtouch2.protocol.at2.messages import RequestState, SystemInfo
 from airtouch2.at2.At2Aircon import At2Aircon
 from airtouch2.at2.At2Group import At2Group
@@ -67,12 +67,32 @@ class At2Client:
     async def _on_connect(self):
         await self._client.send(RequestState())
 
+    async def _read_header(self) -> bool:
+        """
+        Read up to and including the next response header.
+        Discard any bytes up until the header.
+        Return False if the connection was lost.
+        """
+        previous: int | None = None
+        while True:
+            byte = await self._client.read_bytes(1)
+            if not byte:
+                return False
+            if previous == RESPONSE_HEADER_MAGIC[0] and byte[0] == RESPONSE_HEADER_MAGIC[1]:
+                break
+            previous = byte[0]
+        return True
+
     async def _read_response(self) -> SystemInfo | None:
         _LOGGER.debug("Waiting for response")
-        resp = await self._client.read_bytes(MessageLength.RESPONSE)
-        _LOGGER.debug("Got response")
-        if not resp:
+        if not await self._read_header():
             return None
+        rest = await self._client.read_bytes(MessageLength.RESPONSE - len(RESPONSE_HEADER_MAGIC))
+        _LOGGER.debug("Got response")
+        if not rest:
+            return None
+
+        resp = RESPONSE_HEADER_MAGIC + rest
 
         if self._dump_responses:
             # blocks but is only used for dev and debugging
