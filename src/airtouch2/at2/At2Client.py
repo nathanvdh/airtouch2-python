@@ -93,6 +93,9 @@ class At2Client:
             return None
 
         resp = RESPONSE_HEADER_MAGIC + rest
+        if sum(resp[:-1]) % 256 != resp[-1]:
+            _LOGGER.debug("Response message checksum mismatch")
+            return None
 
         if self._dump_responses:
             # blocks but is only used for dev and debugging
