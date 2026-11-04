@@ -102,7 +102,11 @@ class At2Client:
             with open('response_' + datetime.now().strftime("%m-%d-%Y_%H-%M-%S") + '.dump', 'wb') as f:
                 f.write(resp)
 
-        return SystemInfo.from_bytes(resp)
+        try:
+            return SystemInfo.from_bytes(resp)
+        except Exception as e:
+            _LOGGER.warning(f"Failed to parse response, skipping it. {type(e).__name__}: {e} (first bytes {resp[:8].hex(':')})")
+            return None
 
     async def _handle_one_message(self) -> None:
         system_info = await self._read_response()
