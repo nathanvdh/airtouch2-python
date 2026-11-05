@@ -64,6 +64,11 @@ class Buffer(Serializable):
     def read_remaining(self) -> bytes:
         return self.read_bytes(self._head - self._tail)
 
+    def get_data_from_offset(self, offset: int) -> bytes:
+        if (offset >= self._head):
+            return bytes()
+        return self._data[offset:self._head]
+
     @staticmethod
     def from_bytes(data: bytes) -> Buffer:
         buffer = Buffer(len(data))

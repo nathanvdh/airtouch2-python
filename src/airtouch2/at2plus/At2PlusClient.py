@@ -1,38 +1,77 @@
 import asyncio
 from datetime import datetime
+import time
+import hashlib
 import logging
 
 from airtouch2.at2plus.At2PlusAircon import At2PlusAircon
 from airtouch2.at2plus.At2PlusGroup import At2PlusGroup
 from airtouch2.common.NetClient import NetClient
-from airtouch2.protocol.at2plus.control_status_common import ControlStatusSubHeader, ControlStatusSubType
-from airtouch2.protocol.at2plus.extended_common import ExtendedMessageSubType, ExtendedSubHeader
-from airtouch2.protocol.at2plus.message_common import HEADER_LENGTH, HEADER_MAGIC, Header, Message, MessageType
-from airtouch2.protocol.at2plus.messages.AcAbilityMessage import AcAbility, AcAbilityMessage, RequestAcAbilityMessage
+from airtouch2.protocol.at2plus.control_status_common import (
+    ControlStatusSubHeader,
+    ControlStatusSubType,
+)
+from airtouch2.protocol.at2plus.extended_common import (
+    ExtendedMessageSubType,
+    ExtendedSubHeader,
+)
+from airtouch2.protocol.at2plus.message_common import (
+    HEADER_LENGTH,
+    HEADER_MAGIC,
+    Header,
+    Message,
+    MessageType,
+)
+from airtouch2.protocol.at2plus.messages.AcAbilityMessage import (
+    AcAbility,
+    AcAbilityMessage,
+    RequestAcAbilityMessage,
+)
 from airtouch2.protocol.at2plus.messages.AcStatus import AcStatusMessage
 from airtouch2.common.Buffer import Buffer
 from airtouch2.protocol.at2plus.crc16_modbus import crc16
 from airtouch2.common.interfaces import Callback, Serializable, TaskCreator
-from airtouch2.protocol.at2plus.messages.GroupNames import RequestGroupNamesMessage, group_names_from_subdata
+from airtouch2.protocol.at2plus.messages.GroupNames import (
+    RequestGroupNamesMessage,
+    group_names_from_subdata,
+)
 from airtouch2.protocol.at2plus.messages.GroupStatus import GroupStatusMessage
+from airtouch2.protocol.at2plus.messages.FavouriteStatus import (
+    Favourite,
+    FavouriteStatusMessage,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
 
 class At2PlusClient:
-    def __init__(self, host: str, dump_responses: bool = False, task_creator: TaskCreator = asyncio.create_task):
+    def __init__(
+        self,
+        host: str,
+        dump_responses: bool = False,
+        task_creator: TaskCreator = asyncio.create_task,
+    ):
         # public
         self.aircons_by_id: dict[int, At2PlusAircon] = {}
         self.groups_by_id: dict[int, At2PlusGroup] = {}
+        self.favourites: list[Favourite] = []
+        self.active_favourite_id: int | None = None
 
         # private
-        self._client = NetClient(host, 9200, self._on_connect, self.handle_one_message, task_creator)
+        self._client = NetClient(
+            host, 9200, self._on_connect, self.handle_one_message, task_creator
+        )
         self._dump_responses = dump_responses
         self._task_creator = task_creator
         self._new_ac_callbacks: list[Callback] = []
         self._ability_message_queue: asyncio.Queue[AcAbilityMessage] = asyncio.Queue()
         self._found_ac = asyncio.Event()
         self._new_group_callbacks: list[Callback] = []
+        self._favourite_callbacks: list[Callback] = []
+
+        # ACK dedupe / rate-limit cache
+        self._last_ack_sent = {}
+        self._ack_min_interval = 0.3
 
         self.add_new_ac_callback(lambda: self._found_ac.set())
 
@@ -66,6 +105,15 @@ class At2PlusClient:
 
         return remove_callback
 
+    def add_favourite_callback(self, callback: Callback):
+        self._favourite_callbacks.append(callback)
+
+        def remove_callback() -> None:
+            if callback in self._favourite_callbacks:
+                self._favourite_callbacks.remove(callback)
+
+        return remove_callback
+
     async def send(self, msg: Serializable):
         await self._client.send(msg)
 
@@ -76,49 +124,131 @@ class At2PlusClient:
             _LOGGER.warning("Reading message failed")
             return
 
-        if message.header.type == MessageType.CONTROL_STATUS:
-            subheader = ControlStatusSubHeader.from_buffer(message.data_buffer)
-            if subheader.sub_type == ControlStatusSubType.AC_STATUS:
-                status_message = AcStatusMessage.from_bytes(
-                    message.data_buffer.read_bytes(subheader.subdata_length.total()))
-                self._task_creator(self._handle_status_message(status_message))
-            elif subheader.sub_type == ControlStatusSubType.GROUP_STATUS:
-                group_status_message = GroupStatusMessage.from_bytes(
-                    message.data_buffer.read_bytes(subheader.subdata_length.total()))
-                self._task_creator(self._handle_group_status_message(group_status_message))
+        _LOGGER.debug(
+            f"=== MESSAGE RECEIVED: Type=0x{message.header.type:02x}, Length={message.header.data_length} ==="
+        )
+        _LOGGER.debug(f"Header: {message.header.to_bytes().hex(':')}")
+        _LOGGER.debug(f"Data: {message.data_buffer.to_bytes().hex(':')}")
+
+        try:
+            if message.header.type == MessageType.CONTROL_STATUS:
+                try:
+                    subheader = ControlStatusSubHeader.from_buffer(message.data_buffer)
+                    if subheader.sub_type == ControlStatusSubType.AC_STATUS:
+                        status_message = AcStatusMessage.from_bytes(
+                            message.data_buffer.read_bytes(
+                                subheader.subdata_length.total()
+                            )
+                        )
+                        self._task_creator(self._handle_status_message(status_message))
+                    elif subheader.sub_type == ControlStatusSubType.GROUP_STATUS:
+                        group_status_message = GroupStatusMessage.from_bytes(
+                            message.data_buffer.read_bytes(
+                                subheader.subdata_length.total()
+                            )
+                        )
+                        self._task_creator(
+                            self._handle_group_status_message(group_status_message)
+                        )
+
+                    elif subheader.sub_type == ControlStatusSubType.FAVORITE_STATUS:
+                        # Status broadcast, no ACK needed.
+                        _LOGGER.debug(
+                            f"Handling Favorite Status message (0x{subheader.sub_type.value:02x})"
+                        )
+                        subdata = message.data_buffer.read_bytes(
+                            subheader.subdata_length.total()
+                        )
+                        fav_status = FavouriteStatusMessage.from_data(
+                            subheader, subdata
+                        )
+                        self.favourites = fav_status.favourites
+                        self.active_favourite_id = fav_status.active_favourite_id
+                        # Notify listeners that the favourites list has changed
+                        for callback in self._favourite_callbacks:
+                            callback()
+
+                    elif subheader.sub_type == ControlStatusSubType.UNKNOWN_45:
+                        _LOGGER.debug(
+                            f"Handling 'Polyaire' broadcast message (0x{subheader.sub_type.value:02x})"
+                        )
+                        await self._send_ack_response(subheader.sub_type)
+
+                    elif subheader.sub_type == ControlStatusSubType.EXTENDED_STATUS:
+                        _LOGGER.debug(
+                            f"Handling Extended Status message (0x{subheader.sub_type.value:02x})"
+                        )
+                        await self._send_ack_response(subheader.sub_type)
+
+                    else:
+                        # Handle unknown control status subtypes gracefully
+                        _LOGGER.debug(
+                            f"Unknown control status subtype: 0x{subheader.sub_type:02x}"
+                        )
+                        _LOGGER.debug(
+                            f"Data: {message.data_buffer.to_bytes().hex(':')}"
+                        )
+
+                except ValueError as e:
+                    # This catches enum parsing errors for unknown subtypes
+                    _LOGGER.debug(f"Unknown control status message type: {e}")
+                    _LOGGER.debug(
+                        f"Raw data: {message.data_buffer.to_bytes().hex(':')}"
+                    )
+
+                    # Try to extract the subtype and send an ACK
+                    raw_data = message.data_buffer.to_bytes()
+                    if len(raw_data) > 0:
+                        unknown_subtype = raw_data[0]
+                        _LOGGER.debug(
+                            f"Sending ACK for unknown subtype: 0x{unknown_subtype:02x}"
+                        )
+                        incoming = raw_data[:8] if len(raw_data) >= 8 else None
+                        await self._send_ack_response(unknown_subtype, False, incoming)
+
+            elif message.header.type == MessageType.EXTENDED:
+                subheader = ExtendedSubHeader.from_buffer(message.data_buffer)
+                if subheader.sub_type == ExtendedMessageSubType.ABILITY:
+                    ability_message_bytes = message.data_buffer.read_remaining()
+                    _LOGGER.debug(
+                        f"Creating ability message from {len(ability_message_bytes)} bytes"
+                    )
+                    ability = AcAbilityMessage.from_bytes(ability_message_bytes)
+                    await self._ability_message_queue.put(ability)
+                elif subheader.sub_type == ExtendedMessageSubType.GROUP_NAME:
+                    group_names_subdata = message.data_buffer.read_remaining()
+                    for id, name in group_names_from_subdata(
+                        group_names_subdata
+                    ).items():
+                        self.groups_by_id[id]._update_name(name)
+                elif subheader.sub_type == ExtendedMessageSubType.ERROR:
+                    # NYI
+                    pass
+                else:
+                    _LOGGER.debug(
+                        f"Unknown extended message subtype: 0x{subheader.sub_type:02x}"
+                    )
+                    _LOGGER.debug(f"Data: {message.data_buffer.to_bytes().hex(':')}")
             else:
-                _LOGGER.warning(
-                    f"Unknown status message type: subtype={subheader.sub_type}, data={message.data_buffer.to_bytes().hex(':')}")
-        elif message.header.type == MessageType.EXTENDED:
-            subheader = ExtendedSubHeader.from_buffer(message.data_buffer)
-            if subheader.sub_type == ExtendedMessageSubType.ABILITY:
-                ability_message_bytes = message.data_buffer.read_remaining()
-                _LOGGER.debug(f"Creating ability message from {len(ability_message_bytes)} bytes")
-                ability = AcAbilityMessage.from_bytes(ability_message_bytes)
-                await self._ability_message_queue.put(ability)
-            elif subheader.sub_type == ExtendedMessageSubType.GROUP_NAME:
-                group_names_subdata = message.data_buffer.read_remaining()
-                for id, name in group_names_from_subdata(group_names_subdata).items():
-                    self.groups_by_id[id]._update_name(name)
-            elif subheader.sub_type == ExtendedMessageSubType.ERROR:
-                # NYI
-                pass
-            else:
-                _LOGGER.warning(
-                    f"Unknown extended message type: subtype={subheader.sub_type}, data={message.data_buffer.to_bytes().hex(':')}")
-        else:
-            _LOGGER.warning(
-                f"Unknown message type, header={message.header.to_bytes().hex(':')}, data={message.data_buffer.to_bytes().hex(':')}")
+                # Handle completely unknown message types
+                _LOGGER.debug(f"Unknown message type: 0x{message.header.type:02x}")
+                _LOGGER.debug(f"Header: {message.header.to_bytes().hex(':')}")
+                _LOGGER.debug(f"Data: {message.data_buffer.to_bytes().hex(':')}")
+
+        except Exception as e:
+            _LOGGER.error(f"Error processing message: {e}", exc_info=True)
+            _LOGGER.debug(f"Message header: {message.header.to_bytes().hex(':')}")
+            _LOGGER.debug(f"Message data: {message.data_buffer.to_bytes().hex(':')}")
 
     async def _read_magic(self) -> bytes:
         """Search for the two header magic bytes"""
         while True:  # exit via return on successful read of header magic
             byte = await self._client.read_bytes(1)
-            while (byte is None or byte[0] != HEADER_MAGIC):
+            while byte is None or byte[0] != HEADER_MAGIC:
                 byte = await self._client.read_bytes(1)
 
             byte = await self._client.read_bytes(1)
-            if (byte is not None and byte[0] == HEADER_MAGIC):
+            if byte is not None and byte[0] == HEADER_MAGIC:
                 return bytes([HEADER_MAGIC, HEADER_MAGIC])
 
     async def _read_header(self) -> tuple[Header, bytes]:
@@ -126,7 +256,7 @@ class At2PlusClient:
         while True:  # exit via return on successful read of header
             header_bytes = bytearray()
             header_bytes += await self._read_magic()
-            header_remainder = await self._client.read_bytes(HEADER_LENGTH-2)
+            header_remainder = await self._client.read_bytes(HEADER_LENGTH - 2)
 
             if not header_remainder:
                 _LOGGER.debug("Failed reading header, trying again")
@@ -150,21 +280,26 @@ class At2PlusClient:
             return None
         if not buffer.append_bytes(data_bytes):
             _LOGGER.warning(
-                f"Received incorrect number of bytes, expected {header.data_length} but received {buffer._head}")
+                f"Received incorrect number of bytes, expected {header.data_length} but received {buffer._head}"
+            )
 
         checksum = await self._client.read_bytes(2)
         if not checksum:
             # interrupted during checksum reading
             return None
         calculated_checksum = crc16(header_bytes[2:] + buffer._data)
-        if (checksum != calculated_checksum):
+        if checksum != calculated_checksum:
             _LOGGER.warning(
-                f"Checksum mismatch, ignoring message: Got {checksum.hex(':')}, expected {calculated_checksum.hex(':')}")
+                f"Checksum mismatch, ignoring message: Got {checksum.hex(':')}, expected {calculated_checksum.hex(':')}"
+            )
             return None
 
         if self._dump_responses:
             # blocks but is only used for dev and debugging
-            with open('message_' + datetime.now().strftime("%m-%d-%Y_%H-%M-%S") + '.dump', 'wb') as f:
+            with open(
+                "message_" + datetime.now().strftime("%m-%d-%Y_%H-%M-%S") + ".dump",
+                "wb",
+            ) as f:
                 f.write(header.to_bytes() + buffer.to_bytes() + checksum)
 
         return Message(header, buffer)
@@ -199,10 +334,14 @@ class At2PlusClient:
         ac_ability = await self._ability_message_queue.get()
         _LOGGER.debug("Got ability message response")
         if len(ac_ability.abilities) != 1:
-            _LOGGER.warning(f"Expected ability of single requested AC but got {len(ac_ability.abilities)}")
+            _LOGGER.warning(
+                f"Expected ability of single requested AC but got {len(ac_ability.abilities)}"
+            )
             return None
         if ac_ability.abilities[0].ac_id != id:
-            _LOGGER.warning(f"Requested ability of AC{id} but got AC{ac_ability.abilities[0].ac_id}")
+            _LOGGER.warning(
+                f"Requested ability of AC{id} but got AC{ac_ability.abilities[0].ac_id}"
+            )
             return None
         _LOGGER.debug(f"Got ability of AC{id}: {ac_ability.abilities[0]}")
         return ac_ability.abilities[0]
@@ -224,3 +363,135 @@ class At2PlusClient:
         if request_names:
             _LOGGER.debug("Requesting all group names")
             await self._client.send(RequestGroupNamesMessage())
+
+    async def _send_ack_response(
+        self, msg_type: int, message_type: bool = False, incoming_subheader=None
+    ):
+        """Send acknowledgment response."""
+        try:
+            ack_data: bytes
+
+            if msg_type == 0x2B:  # Extended Status - Timer/System related
+                # This is the working ACK format discovered through testing.
+                # It follows the same pattern as other simple status ACKs (0x31, 0x40).
+                ack_data = bytes(
+                    [
+                        0x2B,
+                        0x00,  # Subtype + reserved
+                        0x00,
+                        0x01,  # Normal data length (1 byte)
+                        0x00,
+                        0x00,  # Repeat data length (0)
+                        0x00,
+                        0x00,  # Repeat count (0)
+                        0x00,  # 1-byte zero payload
+                    ]
+                )
+
+            # ACKs for these probably not needed but keeping in case.
+            #
+            # elif msg_type == 0x10:  # AC Status Extended
+            #     # Based on doc offsets 0x162-0x163 (AC status)
+            #     ack_data = bytes(
+            #         [
+            #             0x10,
+            #             0x00,  # Subtype + reserved
+            #             0x00,
+            #             0x02,  # Normal data length (2 bytes)
+            #             0x00,
+            #             0x00,  # Repeat data length (0)
+            #             0x00,
+            #             0x00,  # Repeat count (0)
+            #             0x00,
+            #             0x00,  # Basic AC status ACK
+            #         ]
+            #     )
+
+            elif msg_type == 0x45:  
+                # Basic acknowledgment for 0x45 - System Identity Broadcast
+                ack_data = bytes(
+                    [
+                        0x45,
+                        0x00,  # Subtype + reserved
+                        0x00,
+                        0x01,  # Normal data length (1 byte)
+                        0x00,
+                        0x00,  # Repeat data length (0)
+                        0x00,
+                        0x00,  # Repeat count (0)
+                        0x00,  # Simple ACK
+                    ]
+                )
+
+            else:
+                # Generic acknowledgment for other unknown types
+                ack_data = bytes(
+                    [
+                        msg_type,
+                        0x00,  # Subtype + reserved
+                        0x00,
+                        0x00,  # Normal data length (0)
+                        0x00,
+                        0x00,  # Repeat data length (0)
+                        0x00,
+                        0x00,  # Repeat count (0)
+                    ]
+                )
+
+            # Rate-limit: suppress sending identical ACKs too frequently
+            try:
+                ack_hash = hashlib.sha256(ack_data).hexdigest()
+            except Exception:
+                # Fallback to raw bytes repr if hashing fails for some reason
+                ack_hash = str(ack_data)
+
+            now = time.monotonic()
+            last_sent = self._last_ack_sent.get(ack_hash)
+            if (
+                last_sent is not None
+                and (now - last_sent) < self._ack_min_interval    
+            ):
+                _LOGGER.debug(
+                    f"Suppressing duplicate ACK for subtype 0x{msg_type:02x} (sent {now - last_sent:.03f}s ago)"
+                )
+                return
+
+            # record send time and log the ACK payload
+            self._last_ack_sent[ack_hash] = now
+            _LOGGER.debug(
+                f"ACK payload for subtype 0x{msg_type:02x}: {ack_data.hex(':')}"
+            )
+
+            # Create proper header for control status message
+            from airtouch2.protocol.at2plus.message_common import AddressMsgType
+
+            header: Header
+            if msg_type == 0x2B or msg_type == 0x45:
+                # The 0x2B and 0x45 ACKs require a `CONTROL_STATUS` message (type `0xC0`) header address to be accepted.
+                header = Header(
+                    0xC0,
+                    MessageType.CONTROL_STATUS,
+                    len(ack_data),
+                )
+            else:
+                # Other ACKs use the standard client address (0x80).
+                header = Header(
+                    AddressMsgType.NORMAL,
+                    MessageType.CONTROL_STATUS,
+                    len(ack_data),
+                )
+
+            # Create and send the message
+            buffer = Buffer(len(ack_data))
+            buffer.append_bytes(ack_data)
+
+            message = Message(header, buffer)
+            await self._client.send(message)
+
+            _LOGGER.debug(f"Sent ACK for subtype 0x{msg_type:02x}")
+            _LOGGER.debug(f"RAW: {message.to_bytes().hex(':')}")
+
+        except Exception as e:
+            _LOGGER.error(
+                f"Failed to send ACK for 0x{msg_type:02x}: {e}", exc_info=True
+            )
