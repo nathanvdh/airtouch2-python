@@ -30,7 +30,7 @@ class At2PlusClient:
         self._dump_responses = dump_responses
         self._task_creator = task_creator
         self._new_ac_callbacks: list[Callback] = []
-        self._ability_message_queue: asyncio.Queue[AcAbilityMessage] = asyncio.Queue()
+        self._ability_message_queue: asyncio.Queue[AcAbilityMessage | None] = asyncio.Queue()
         self._found_ac = asyncio.Event()
         self._new_group_callbacks: list[Callback] = []
 
@@ -77,28 +77,62 @@ class At2PlusClient:
             return
 
         if message.header.type == MessageType.CONTROL_STATUS:
-            subheader = ControlStatusSubHeader.from_buffer(message.data_buffer)
+            try:
+                subheader = ControlStatusSubHeader.from_buffer(message.data_buffer)
+            except Exception as e:
+                self._log_parse_failure(message, e)
+                return
+
             if subheader.sub_type == ControlStatusSubType.AC_STATUS:
-                status_message = AcStatusMessage.from_bytes(
-                    message.data_buffer.read_bytes(subheader.subdata_length.total()))
-                self._task_creator(self._handle_status_message(status_message))
+                try:
+                    status_message = AcStatusMessage.from_bytes(
+                        message.data_buffer.read_bytes(subheader.subdata_length.total()))
+                except Exception as e:
+                    self._log_parse_failure(message, e)
+                    return
+                task = self._task_creator(self._handle_status_message(status_message))
+                task.set_name("Handle AT2+ AC status message")
+                task.add_done_callback(self._log_handler_task_exception)
             elif subheader.sub_type == ControlStatusSubType.GROUP_STATUS:
-                group_status_message = GroupStatusMessage.from_bytes(
-                    message.data_buffer.read_bytes(subheader.subdata_length.total()))
-                self._task_creator(self._handle_group_status_message(group_status_message))
+                try:
+                    group_status_message = GroupStatusMessage.from_bytes(
+                        message.data_buffer.read_bytes(subheader.subdata_length.total()))
+                except Exception as e:
+                    self._log_parse_failure(message, e)
+                    return
+                task = self._task_creator(self._handle_group_status_message(group_status_message))
+                task.set_name("Handle AT2+ group status message")
+                task.add_done_callback(self._log_handler_task_exception)
             else:
                 _LOGGER.warning(
                     f"Unknown status message type: subtype={subheader.sub_type}, data={message.data_buffer.to_bytes().hex(':')}")
         elif message.header.type == MessageType.EXTENDED:
-            subheader = ExtendedSubHeader.from_buffer(message.data_buffer)
+            try:
+                subheader = ExtendedSubHeader.from_buffer(message.data_buffer)
+            except Exception as e:
+                self._log_parse_failure(message, e)
+                return
+
             if subheader.sub_type == ExtendedMessageSubType.ABILITY:
                 ability_message_bytes = message.data_buffer.read_remaining()
                 _LOGGER.debug(f"Creating ability message from {len(ability_message_bytes)} bytes")
-                ability = AcAbilityMessage.from_bytes(ability_message_bytes)
+                try:
+                    ability = AcAbilityMessage.from_bytes(ability_message_bytes)
+                except Exception as e:
+                    self._log_parse_failure(message, e)
+                    # Wake the request task so it can retry instead of
+                    # waiting forever for an ability message that was dropped.
+                    await self._ability_message_queue.put(None)
+                    return
                 await self._ability_message_queue.put(ability)
             elif subheader.sub_type == ExtendedMessageSubType.GROUP_NAME:
                 group_names_subdata = message.data_buffer.read_remaining()
-                for id, name in group_names_from_subdata(group_names_subdata).items():
+                try:
+                    group_names = group_names_from_subdata(group_names_subdata)
+                except Exception as e:
+                    self._log_parse_failure(message, e)
+                    return
+                for id, name in group_names.items():
                     self.groups_by_id[id]._update_name(name)
             elif subheader.sub_type == ExtendedMessageSubType.ERROR:
                 # NYI
@@ -109,6 +143,26 @@ class At2PlusClient:
         else:
             _LOGGER.warning(
                 f"Unknown message type, header={message.header.to_bytes().hex(':')}, data={message.data_buffer.to_bytes().hex(':')}")
+
+    @staticmethod
+    def _log_parse_failure(message: Message, error: Exception) -> None:
+        _LOGGER.warning(
+            f"Failed to parse AT2+ message, skipping it: {type(error).__name__}: {error} "
+            f"(header type {message.header.type}, data {message.data_buffer.to_bytes().hex(':')})",
+            exc_info=True,
+        )
+
+    @staticmethod
+    def _log_handler_task_exception(task: asyncio.Task[None]) -> None:
+        if task.cancelled():
+            return
+
+        error = task.exception()
+        if error is not None:
+            _LOGGER.error(
+                f"{task.get_name()} failed: {type(error).__name__}: {error}",
+                exc_info=(type(error), error, error.__traceback__),
+            )
 
     async def _read_magic(self) -> bytes:
         """Search for the two header magic bytes"""
@@ -197,6 +251,9 @@ class At2PlusClient:
         await self._client.send(RequestAcAbilityMessage(id))
         _LOGGER.debug("Waiting for ability message response...")
         ac_ability = await self._ability_message_queue.get()
+        if ac_ability is None:
+            _LOGGER.warning(f"Skipping invalid ability response for AC{id}; requesting it again")
+            return None
         _LOGGER.debug("Got ability message response")
         if len(ac_ability.abilities) != 1:
             _LOGGER.warning(f"Expected ability of single requested AC but got {len(ac_ability.abilities)}")
