@@ -35,6 +35,7 @@ class ControlStatusSubType(IntEnum):
     GROUP_STATUS = 0x21
     AC_CONTROL = 0x22
     AC_STATUS = 0x23
+    SENSOR_STATUS = 0x2B
 
 
 @dataclass
