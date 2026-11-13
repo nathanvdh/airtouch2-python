@@ -15,6 +15,7 @@ from airtouch2.protocol.at2plus.crc16_modbus import crc16
 from airtouch2.common.interfaces import Callback, Serializable, TaskCreator
 from airtouch2.protocol.at2plus.messages.GroupNames import RequestGroupNamesMessage, group_names_from_subdata
 from airtouch2.protocol.at2plus.messages.GroupStatus import GroupStatusMessage
+from airtouch2.protocol.at2plus.messages.SensorStatus import SensorStatus, SensorStatusMessage
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -24,6 +25,7 @@ class At2PlusClient:
         # public
         self.aircons_by_id: dict[int, At2PlusAircon] = {}
         self.groups_by_id: dict[int, At2PlusGroup] = {}
+        self.sensors_by_id: dict[int, SensorStatus] = {}
 
         # private
         self._client = NetClient(host, 9200, self._on_connect, self.handle_one_message, task_creator)
@@ -33,6 +35,7 @@ class At2PlusClient:
         self._ability_message_queue: asyncio.Queue[AcAbilityMessage | None] = asyncio.Queue()
         self._found_ac = asyncio.Event()
         self._new_group_callbacks: list[Callback] = []
+        self._sensor_callbacks: list[Callback] = []
 
         self.add_new_ac_callback(lambda: self._found_ac.set())
 
@@ -63,6 +66,16 @@ class At2PlusClient:
         def remove_callback() -> None:
             if callback in self._new_group_callbacks:
                 self._new_group_callbacks.remove(callback)
+
+        return remove_callback
+
+    def add_sensor_callback(self, callback: Callback):
+        """Called whenever a sensor status (0x2B) message updates sensors_by_id"""
+        self._sensor_callbacks.append(callback)
+
+        def remove_callback() -> None:
+            if callback in self._sensor_callbacks:
+                self._sensor_callbacks.remove(callback)
 
         return remove_callback
 
@@ -102,6 +115,16 @@ class At2PlusClient:
                     return
                 task = self._task_creator(self._handle_group_status_message(group_status_message))
                 task.set_name("Handle AT2+ group status message")
+                task.add_done_callback(self._log_handler_task_exception)
+            elif subheader.sub_type == ControlStatusSubType.SENSOR_STATUS:
+                try:
+                    sensor_status_message = SensorStatusMessage.from_bytes(
+                        message.data_buffer.read_bytes(subheader.subdata_length.total()))
+                except Exception as e:
+                    self._log_parse_failure(message, e)
+                    return
+                task = self._task_creator(self._handle_sensor_status_message(sensor_status_message))
+                task.set_name("Handle AT2+ sensor status message")
                 task.add_done_callback(self._log_handler_task_exception)
             else:
                 _LOGGER.warning(
@@ -263,6 +286,13 @@ class At2PlusClient:
             return None
         _LOGGER.debug(f"Got ability of AC{id}: {ac_ability.abilities[0]}")
         return ac_ability.abilities[0]
+
+    async def _handle_sensor_status_message(self, message: SensorStatusMessage):
+        for status in message.statuses:
+            self.sensors_by_id[status.id] = status
+        _LOGGER.debug(f"Updated sensors: {message.statuses}")
+        for callback in self._sensor_callbacks:
+            callback()
 
     async def _handle_group_status_message(self, message: GroupStatusMessage):
         _LOGGER.debug("Handling group status message")
